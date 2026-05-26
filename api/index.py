@@ -263,8 +263,8 @@ def get_stock(ticker: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Serve static frontend files locally
+# Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles
-public_path = os.path.join(project_root, "public")
+public_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
 if os.path.exists(public_path):
     app.mount("/", StaticFiles(directory=public_path, html=True), name="static")
