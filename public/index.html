@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian Scan - US Stock Opportunities</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Main Sidebar/Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <div class="logo-icon"><i data-lucide="activity"></i></div>
+                <h1>Obsidian<span>Scan</span></h1>
+            </div>
+            
+            <nav class="app-nav">
+                <button class="nav-btn active" data-tab="opportunities">
+                    <i data-lucide="compass"></i> <span>Opportunities</span>
+                </button>
+                <button class="nav-btn" data-tab="insider">
+                    <i data-lucide="shield-alert"></i> <span>Insider Sentiment</span>
+                </button>
+                <button class="nav-btn" data-tab="sectors">
+                    <i data-lucide="layers"></i> <span>Sector Strengths</span>
+                </button>
+            </nav>
+
+            <div class="header-status">
+                <span class="status-indicator live"></span>
+                <span class="status-text">15-Min Delayed Data</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="app-main">
+            <!-- Opportunities Tab -->
+            <section id="opportunities-tab" class="tab-content active">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="sliders"></i>
+                        <h2>Technical Scanner</h2>
+                    </div>
+                    <div class="signal-selector">
+                        <button class="signal-btn active" data-signal="oversold">Oversold (RSI < 30)</button>
+                        <button class="signal-btn" data-signal="double_bottom">Double Bottom</button>
+                        <button class="signal-btn" data-signal="wedge_down">Wedge Down</button>
+                        <button class="signal-btn" data-signal="triangle_ascending">Triangle Ascending</button>
+                        <button class="signal-btn" data-signal="top_gainers">Top Gainers</button>
+                        <button class="signal-btn" data-signal="new_high">New High</button>
+                    </div>
+                </div>
+
+                <div id="opps-grid" class="cards-grid">
+                    <!-- Skeleton Cards Loader -->
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
+            </section>
+
+            <!-- Insider Sentiment Tab -->
+            <section id="insider-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="trending-up"></i>
+                        <h2>Executive & Insider Trades</h2>
+                    </div>
+                    <div class="option-selector">
+                        <button class="option-btn active" data-option="top owner trade">Top Owner Trades</button>
+                        <button class="option-btn" data-option="latest">Latest Transactions</button>
+                        <button class="option-btn" data-option="top week">Top Week</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="premium-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Relationship</th>
+                                <th>Date</th>
+                                <th>Transaction</th>
+                                <th>Cost ($)</th>
+                                <th>Shares</th>
+                                <th>Value ($)</th>
+                                <th>Total Shares</th>
+                                <th>SEC Form 4</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insider-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Sectors Tab -->
+            <section id="sectors-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="pie-chart"></i>
+                        <h2>Sector Strength & Performance Matrix</h2>
+                    </div>
+                </div>
+
+                <div id="sectors-grid" class="sectors-grid">
+                    <!-- Populated dynamically -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Ticker Detail Modal (Obsidian Sheet) -->
+    <div id="ticker-modal" class="modal-overlay">
+        <div class="modal-card">
+            <header class="modal-header">
+                <div class="modal-title-section">
+                    <h2 id="modal-ticker">AAPL</h2>
+                    <div class="company-subinfo">
+                        <span id="modal-company">Apple Inc.</span> • 
+                        <span id="modal-sector">Technology</span> • 
+                        <span id="modal-industry">Consumer Electronics</span>
+                    </div>
+                </div>
+                <button class="close-modal-btn"><i data-lucide="x"></i></button>
+            </header>
+
+            <div class="modal-body">
+                <!-- Left Column: Metrics & Info -->
+                <div class="modal-left-col">
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="m-label">Market Cap</span>
+                            <span class="m-value" id="m-mcap">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label">P/E Ratio</span>
+                            <span class="m-value" id="m-pe">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label">Short Float</span>
+                            <span class="m-value" id="m-sfloat">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label">RSI (14)</span>
+                            <span class="m-value" id="m-rsi">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label">Price</span>
+                            <span class="m-valueHighlight" id="m-price">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label">Change</span>
+                            <span class="m-value" id="m-change">-</span>
+                        </div>
+                    </div>
+
+                    <div class="modal-detail-panel">
+                        <h3>Company Profile</h3>
+                        <p id="modal-desc">Loading description...</p>
+                    </div>
+
+                    <div class="modal-detail-panel">
+                        <h3>Sector Peers</h3>
+                        <div id="modal-peers" class="tag-container">
+                            <!-- Peer buttons -->
+                        </div>
+                    </div>
+
+                    <div class="modal-detail-panel">
+                        <h3>Top ETF Holders</h3>
+                        <div id="modal-etfs" class="tag-container">
+                            <!-- ETF tags -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Chart & News -->
+                <div class="modal-right-col">
+                    <div class="chart-container">
+                        <h3>Technical Chart (Daily Candles)</h3>
+                        <div class="chart-wrapper">
+                            <img id="modal-chart-img" src="" alt="Stock Technical Chart">
+                        </div>
+                        <div class="chart-links">
+                            <a id="tv-link" href="#" target="_blank" class="tv-btn"><i data-lucide="external-link"></i> View on TradingView</a>
+                        </div>
+                    </div>
+
+                    <div class="modal-detail-panel news-section">
+                        <h3>Recent News Feed</h3>
+                        <div id="modal-news-list" class="news-list">
+                            <!-- News links -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>

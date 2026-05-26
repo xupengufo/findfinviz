@@ -1,0 +1,6 @@
+cache.db
+scratch/
+__pycache__/
+*.pyc
+.env
+.vercel
