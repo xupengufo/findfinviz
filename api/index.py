@@ -29,14 +29,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Robust Cache implementation (Vercel KV Redis with local SQLite fallback)
+import redis
+
+# Robust Cache implementation (Redis with local SQLite fallback)
 class FallbackCache:
     def __init__(self):
-        self.kv_url = os.environ.get("KV_REST_API_URL")
-        self.kv_token = os.environ.get("KV_REST_API_TOKEN")
-        self.is_vercel = bool(self.kv_url and self.kv_token)
+        self.redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
+        self.is_redis = bool(self.redis_url)
         
-        if not self.is_vercel:
+        if self.is_redis:
+            try:
+                if self.redis_url.startswith("http"):
+                    self.is_redis_rest = True
+                    self.kv_url = self.redis_url
+                    self.kv_token = os.environ.get("KV_REST_API_TOKEN")
+                else:
+                    self.is_redis_rest = False
+                    self.client = redis.from_url(self.redis_url, decode_responses=True)
+            except Exception as e:
+                print("Failed to connect to Redis, falling back to SQLite:", e)
+                self.is_redis = False
+                
+        if not self.is_redis:
             self.db_path = os.path.join(project_root, "cache.db")
             try:
                 conn = sqlite3.connect(self.db_path)
@@ -50,16 +64,21 @@ class FallbackCache:
                 print("Failed to initialize SQLite cache:", e)
 
     def get(self, key: str):
-        if self.is_vercel:
+        if self.is_redis:
             try:
-                headers = {"Authorization": f"Bearer {self.kv_token}"}
-                res = requests.get(f"{self.kv_url}/get/{key}", headers=headers, timeout=5)
-                if res.status_code == 200:
-                    val = res.json().get("result")
+                if getattr(self, "is_redis_rest", False):
+                    headers = {"Authorization": f"Bearer {self.kv_token}"}
+                    res = requests.get(f"{self.kv_url}/get/{key}", headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        val = res.json().get("result")
+                        if val:
+                            return json.loads(val)
+                else:
+                    val = self.client.get(key)
                     if val:
                         return json.loads(val)
             except Exception as e:
-                print("Vercel KV get error:", e)
+                print("Redis cache get error:", e)
             return None
         else:
             try:
@@ -80,17 +99,20 @@ class FallbackCache:
 
     def set(self, key: str, value: any, expires_in: int = 14400):  # 4 hours cache by default
         val_str = json.dumps(value)
-        if self.is_vercel:
+        if self.is_redis:
             try:
-                headers = {"Authorization": f"Bearer {self.kv_token}"}
-                requests.post(f"{self.kv_url}/set/{key}?ex={expires_in}", headers=headers, data=val_str, timeout=5)
+                if getattr(self, "is_redis_rest", False):
+                    headers = {"Authorization": f"Bearer {self.kv_token}"}
+                    requests.post(f"{self.kv_url}/set/{key}?ex={expires_in}", headers=headers, data=val_str, timeout=5)
+                else:
+                    self.client.setex(key, expires_in, val_str)
             except Exception as e:
-                print("Vercel KV set error:", e)
+                print("Redis cache set error:", e)
         else:
             try:
                 expires_at = int(datetime.utcnow().timestamp()) + expires_in
                 conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
+                cursor = cursor = conn.cursor()
                 cursor.execute(
                     "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
                     (key, val_str, expires_at)
@@ -101,12 +123,15 @@ class FallbackCache:
                 print("SQLite cache set error:", e)
 
     def delete(self, key: str):
-        if self.is_vercel:
+        if self.is_redis:
             try:
-                headers = {"Authorization": f"Bearer {self.kv_token}"}
-                requests.post(f"{self.kv_url}/del/{key}", headers=headers, timeout=5)
+                if getattr(self, "is_redis_rest", False):
+                    headers = {"Authorization": f"Bearer {self.kv_token}"}
+                    requests.post(f"{self.kv_url}/del/{key}", headers=headers, timeout=5)
+                else:
+                    self.client.delete(key)
             except Exception as e:
-                print("Vercel KV delete error:", e)
+                print("Redis cache delete error:", e)
         else:
             try:
                 conn = sqlite3.connect(self.db_path)
@@ -121,7 +146,7 @@ cache = FallbackCache()
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "vercel_kv": cache.is_vercel}
+    return {"status": "ok", "vercel_kv": cache.is_redis}
 
 @app.get("/api/opportunities")
 def get_opportunities(signal: str = "Oversold"):
