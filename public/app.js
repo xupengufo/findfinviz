@@ -532,8 +532,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = await res.json();
             const list = payload.data || [];
 
+            // Sort sectors by daily change descending (highest change/strongest first)
+            const sortedList = [...list].sort((a, b) => {
+                const valA = a['Change'] !== undefined && a['Change'] !== null ? parseFloat(a['Change']) : -999;
+                const valB = b['Change'] !== undefined && b['Change'] !== null ? parseFloat(b['Change']) : -999;
+                return valB - valA;
+            });
+
             grid.innerHTML = '';
-            list.forEach(item => {
+            sortedList.forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'sector-card';
 
