@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-footer-item">
                             <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
-                            <span class="item-value">${item['Market Cap'] || '-'}</span>
+                            <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
                         </div>
                         <div class="card-footer-item">
                             <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="sector-metric">
                         <span class="item-label">${translations[activeLang].metric_mcap}</span>
-                        <span class="item-value">${item['Market Cap'] || '-'}</span>
+                        <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
                     </div>
                     <div class="sector-metric">
                         <span class="item-label">${translations[activeLang].metric_recom}</span>
@@ -612,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modal-desc').innerText = stockData.description || translations[activeLang].modal_no_desc;
 
             // Populate metrics
-            document.getElementById('m-mcap').innerText = f['Market Cap'] || '-';
+            document.getElementById('m-mcap').innerText = formatMarketCap(f['Market Cap']);
             document.getElementById('m-pe').innerText = f['P/E'] || '-';
             document.getElementById('m-sfloat').innerText = f['Short Float'] || '-';
             document.getElementById('m-rsi').innerText = f['RSI (14)'] || '-';
@@ -698,5 +698,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatNumber(num) {
         if (!num || isNaN(num)) return num;
         return parseFloat(num).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+
+    function formatMarketCap(val) {
+        if (val === undefined || val === null || val === '') return '-';
+        
+        let num = typeof val === 'number' ? val : parseFloat(val);
+        if (isNaN(num)) return val;
+        
+        let strVal = String(val).trim();
+        if (/[a-zA-Z%]$/.test(strVal)) return val;
+
+        if (activeLang === 'zh') {
+            if (num >= 1e12) {
+                return (num / 1e12).toFixed(2) + '万亿';
+            } else if (num >= 1e8) {
+                return (num / 1e8).toFixed(2) + '亿';
+            } else if (num >= 1e4) {
+                return (num / 1e4).toFixed(2) + '万';
+            }
+            return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        } else {
+            if (num >= 1e12) {
+                return (num / 1e12).toFixed(2) + 'T';
+            } else if (num >= 1e9) {
+                return (num / 1e9).toFixed(2) + 'B';
+            } else if (num >= 1e6) {
+                return (num / 1e6).toFixed(2) + 'M';
+            } else if (num >= 1e3) {
+                return (num / 1e3).toFixed(2) + 'K';
+            }
+            return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        }
     }
 });
