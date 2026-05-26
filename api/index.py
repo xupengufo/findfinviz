@@ -240,6 +240,25 @@ def get_sectors():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/reddit")
+def get_reddit_sentiment():
+    cache_key = "reddit_sentiment"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return {"data": cached_data, "source": "cache"}
+
+    try:
+        res = requests.get("https://apewisdom.io/api/v1.0/filter/all-stocks", timeout=10)
+        if res.status_code == 200:
+            payload = res.json()
+            data = payload.get("results", [])
+            cache.set(cache_key, data, expires_in=1800) # 30 minutes cache
+            return {"data": data, "source": "live"}
+        else:
+            raise HTTPException(status_code=res.status_code, detail="Failed to fetch from ApeWisdom")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/stock/{ticker}")
 def get_stock(ticker: str):
     cache_key = f"stock_details_{ticker.lower()}"

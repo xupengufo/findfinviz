@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabLoaded = {
         opportunities: false,
         insider: false,
-        sectors: false
+        sectors: false,
+        reddit: false
     };
 
     // Cache for stock details to allow instant modal transitions
@@ -26,10 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tab_opps: "Opportunities",
             tab_insider: "Insider Sentiment",
             tab_sectors: "Sector Strengths",
+            tab_reddit: "Reddit Sentiment",
             live_cache: "Live Cache",
             scanner_title: "Technical Scanner",
             insider_title: "Executive & Insider Trades",
             sectors_title: "Sector Strength & Performance Matrix",
+            reddit_title: "Reddit & WSB Retail Sentiment",
             sig_oversold: "Oversold",
             sig_double_bottom: "Double Bottom",
             sig_wedge_down: "Wedge Down",
@@ -39,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
             opt_top_owner: "Top Owner Trades",
             opt_latest: "Latest Transactions",
             opt_top_week: "Top Week",
+            th_rank: "Rank",
             th_ticker: "Ticker",
+            th_name: "Name",
             th_relation: "Relationship",
             th_date: "Date",
             th_txn: "Transaction",
@@ -48,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
             th_value: "Value ($)",
             th_total_shares: "Total Shares",
             th_sec_form: "SEC Form 4",
+            th_mentions: "Mentions",
+            th_upvotes: "Upvotes",
+            th_trend: "24H Trend",
             metric_stocks: "Stocks Count",
             metric_mcap: "Market Cap",
             metric_recom: "Recom",
@@ -78,6 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
             err_insider: "Error loading transaction records.",
             loading_sectors: "Loading sector performance...",
             err_sectors: "Error loading sector strength matrix.",
+            loading_reddit: "Loading Reddit sentiment...",
+            err_reddit: "Error: Failed to fetch Reddit sentiment from the API.",
             txn_buy: "BUY",
             txn_sell: "SELL",
             modal_loading_company: "Loading company details...",
@@ -94,10 +104,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tab_opps: "技术选股",
             tab_insider: "大股东动向",
             tab_sectors: "板块热力",
+            tab_reddit: "散户热度",
             live_cache: "云端缓存",
             scanner_title: "技术选股指标",
             insider_title: "大股东与高管交易流",
             sectors_title: "美股板块强弱表现",
+            reddit_title: "Reddit 散户讨论舆情",
             sig_oversold: "超卖突破 (RSI < 30)",
             sig_double_bottom: "双底构筑",
             sig_wedge_down: "下降楔形",
@@ -107,7 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
             opt_top_owner: "大股东交易排行",
             opt_latest: "最新交易快讯",
             opt_top_week: "本周大额排行",
+            th_rank: "排名",
             th_ticker: "代码",
+            th_name: "公司名称",
             th_relation: "交易人职位",
             th_date: "交易日期",
             th_txn: "交易性质",
@@ -116,6 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
             th_value: "总金额 ($)",
             th_total_shares: "持股总量",
             th_sec_form: "备案申报",
+            th_mentions: "提及次数",
+            th_upvotes: "点赞数",
+            th_trend: "24H 趋势",
             metric_stocks: "成份股数",
             metric_mcap: "行业总市值",
             metric_recom: "买入评级",
@@ -146,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
             err_insider: "错误：无法加载交易记录。",
             loading_sectors: "正在加载板块热力图...",
             err_sectors: "错误：无法加载板块表现矩阵。",
+            loading_reddit: "正在加载 Reddit 散户热度...",
+            err_reddit: "错误：无法加载 Reddit 散户舆情。",
             txn_buy: "买入",
             txn_sell: "卖出",
             modal_loading_company: "正在加载公司基本面...",
@@ -191,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabLoaded.opportunities) loadOpportunities(true);
         if (tabLoaded.insider) loadInsider(true);
         if (tabLoaded.sectors) loadSectors(true);
+        if (tabLoaded.reddit) loadReddit(true);
     }
 
     // Helper to robustly parse and format FinViz percent/float changes
@@ -308,6 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadInsider();
                 } else if (activeTab === 'sectors') {
                     loadSectors();
+                } else if (activeTab === 'reddit') {
+                    loadReddit();
                 }
             });
         });
@@ -671,6 +693,86 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to load sectors:', error);
             grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_sectors}</div>`;
             lucide.createIcons();
+        }
+    }
+
+    async function loadReddit(force = false) {
+        if (tabLoaded.reddit && !force) return;
+
+        const tbody = document.getElementById('reddit-table-body');
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">${translations[activeLang].loading_reddit}</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/reddit`);
+            const payload = await res.json();
+            const list = payload.data || [];
+
+            tbody.innerHTML = '';
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No data found.</td></tr>`;
+                return;
+            }
+
+            // Slice to show top 50
+            const displayList = list.slice(0, 50);
+
+            displayList.forEach(item => {
+                const tr = document.createElement('tr');
+                
+                const rank = item['rank'] || '-';
+                const ticker = item['ticker'] || '-';
+                const name = item['name'] || '-';
+                const mentions = item['mentions'] || 0;
+                const upvotes = item['upvotes'] || 0;
+                const rank24h = item['rank_24h_ago'];
+
+                let trendText = '-';
+                let trendClass = 'trend-neutral';
+                let trendIcon = 'minus';
+                
+                if (rank24h !== undefined && rank24h !== null && rank24h !== '') {
+                    const rToday = parseInt(rank);
+                    const r24h = parseInt(rank24h);
+                    if (!isNaN(rToday) && !isNaN(r24h)) {
+                        const diff = r24h - rToday; // if today is 1 and 24h ago was 4, diff is +3 (climbed)
+                        if (diff > 0) {
+                            trendText = `+${diff}`;
+                            trendClass = 'trend-up';
+                            trendIcon = 'arrow-up';
+                        } else if (diff < 0) {
+                            trendText = `${diff}`;
+                            trendClass = 'trend-down';
+                            trendIcon = 'arrow-down';
+                        }
+                    }
+                }
+
+                tr.innerHTML = `
+                    <td class="table-rank">${rank}</td>
+                    <td class="table-ticker">${ticker}</td>
+                    <td>${name}</td>
+                    <td>${formatNumber(mentions)}</td>
+                    <td>${formatNumber(upvotes)}</td>
+                    <td class="${trendClass}">
+                        <span class="trend-badge">
+                            <i data-lucide="${trendIcon}" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i>
+                            ${trendText}
+                        </span>
+                    </td>
+                `;
+
+                // Clicking rows opens ticker details modal
+                tr.addEventListener('click', () => {
+                    openModal(ticker);
+                });
+                tbody.appendChild(tr);
+            });
+
+            lucide.createIcons();
+            tabLoaded.reddit = true;
+        } catch (error) {
+            console.error('Failed to load Reddit sentiment:', error);
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--negative);">${translations[activeLang].err_reddit}</td></tr>`;
         }
     }
 

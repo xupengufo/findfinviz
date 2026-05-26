@@ -129,9 +129,23 @@ def sync_sectors():
     except Exception as e:
         print("Failed to scrape sector matrix:", e)
 
+def sync_reddit():
+    print("Scraping Reddit and WSB stock sentiment...")
+    try:
+        res = requests.get("https://apewisdom.io/api/v1.0/filter/all-stocks", timeout=10)
+        if res.status_code == 200:
+            payload = res.json()
+            data = payload.get("results", [])
+            push_to_kv("reddit_sentiment", data)
+        else:
+            print("Failed to fetch from ApeWisdom:", res.status_code)
+    except Exception as e:
+        print("Failed to sync Reddit sentiment:", e)
+
 if __name__ == "__main__":
     print("Starting local sync to Vercel KV...")
     sync_opportunities()
     sync_insiders()
     sync_sectors()
+    sync_reddit()
     print("Sync completed successfully!")

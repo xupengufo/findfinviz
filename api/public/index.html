@@ -33,6 +33,9 @@
                         <button class="nav-btn" data-tab="sectors">
                             <i data-lucide="layers"></i> <span data-i18n="tab_sectors">Sector Strengths</span>
                         </button>
+                        <button class="nav-btn" data-tab="reddit">
+                            <i data-lucide="message-square"></i> <span data-i18n="tab_reddit">Reddit Sentiment</span>
+                        </button>
                     </div>
                 </nav>
 
@@ -151,6 +154,34 @@
 
                 <div id="sectors-grid" class="sectors-grid">
                     <!-- Populated dynamically -->
+                </div>
+            </section>
+
+            <!-- Reddit Sentiment Tab -->
+            <section id="reddit-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="message-square"></i>
+                        <h2 data-i18n="reddit_title">Reddit & WSB Retail Sentiment</h2>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="insider-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="th_rank">Rank</th>
+                                <th data-i18n="th_ticker">Ticker</th>
+                                <th data-i18n="th_name">Name</th>
+                                <th data-i18n="th_mentions">Mentions</th>
+                                <th data-i18n="th_upvotes">Upvotes</th>
+                                <th data-i18n="th_trend">24H Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reddit-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>
