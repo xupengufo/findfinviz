@@ -377,6 +377,35 @@ html[data-theme=dark] .segmented button.active {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
+/* Opportunity Sort Selector styling */
+.sort-selector {
+    margin-top: 4px;
+}
+
+.sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sort-btn .sort-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sort-btn svg, .sort-btn i {
+    width: 12px;
+    height: 12px;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+.sort-btn.active svg, .sort-btn.active i {
+    color: var(--brand-gold);
+}
+
+
 /* Cards Grid */
 .cards-grid {
     display: grid;

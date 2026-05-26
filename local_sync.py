@@ -89,7 +89,7 @@ def sync_opportunities():
         try:
             foverview = Overview()
             foverview.set_filter(signal=signal_name)
-            df = foverview.screener_view(limit=25, verbose=0)
+            df = foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
             data = []
             if df is not None:
                 df = df.fillna("")

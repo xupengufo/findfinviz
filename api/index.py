@@ -178,7 +178,7 @@ def get_opportunities(signal: str = "Oversold"):
         foverview = Overview()
         # Scan S&P 500 by default to keep load light, or fetch general if no index filter
         foverview.set_filter(signal=supported_signals[normalized_signal])
-        df = foverview.screener_view(limit=25, verbose=0)
+        df = foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
         
         data = []
         if df is not None:

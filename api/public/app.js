@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeTab = 'opportunities';
     let activeSignal = 'oversold';
     let activeInsiderOption = 'top owner trade';
+    let activeSortField = 'marketcap';
+    let activeSortDirection = 'desc';
+    let currentOppsList = [];
     
     // API URL configuration (works for both local development and Vercel)
     const API_BASE = window.location.origin;
@@ -61,6 +64,10 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_chart: "Technical Chart (Daily Candles)",
             modal_tv: "View on TradingView",
             modal_news: "Recent News Feed",
+            sort_mcap: "Market Cap",
+            sort_change: "Change",
+            sort_price: "Price",
+            sort_ticker: "Ticker",
             
             // Dynamic content
             loading_opps: "Loading opportunities...",
@@ -125,6 +132,10 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_chart: "日线 K 线图 (技术分析)",
             modal_tv: "在 TradingView 中查看",
             modal_news: "最新财经新闻",
+            sort_mcap: "市值排行",
+            sort_change: "涨跌排行",
+            sort_price: "股价排行",
+            sort_ticker: "代码首字母",
             
             // Dynamic content
             loading_opps: "正在加载选股列表...",
@@ -326,6 +337,38 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        // Sort selectors for Opportunities
+        const sortButtons = document.querySelectorAll('.sort-btn');
+        sortButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sortField = btn.getAttribute('data-sort');
+                if (sortField === activeSortField) {
+                    activeSortDirection = activeSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    activeSortField = sortField;
+                    activeSortDirection = sortField === 'ticker' ? 'asc' : 'desc';
+                }
+                
+                sortButtons.forEach(b => {
+                    b.classList.remove('active');
+                    if (b !== btn) {
+                        const wrap = b.querySelector('.sort-icon-wrap');
+                        if (wrap) {
+                            wrap.innerHTML = `<i data-lucide="arrow-down-narrow-wide"></i>`;
+                        }
+                    }
+                });
+                
+                btn.classList.add('active');
+                const iconWrap = btn.querySelector('.sort-icon-wrap');
+                if (iconWrap) {
+                    iconWrap.innerHTML = `<i data-lucide="${activeSortDirection === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-narrow-wide'}"></i>`;
+                }
+                
+                renderOpportunities(currentOppsList);
+            });
+        });
+
         // Close Modal events
         document.querySelector('.close-modal-btn').addEventListener('click', closeModal);
         document.getElementById('ticker-modal').addEventListener('click', (e) => {
@@ -349,61 +392,70 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(`${API_BASE}/api/opportunities?signal=${activeSignal}`);
             const payload = await res.json();
-            const list = payload.data || [];
+            currentOppsList = payload.data || [];
             
-            grid.innerHTML = '';
-            if (list.length === 0) {
-                grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_opps}</div>`;
-                lucide.createIcons();
-                return;
-            }
-
-            list.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'opp-card';
-                
-                const { formatted: changeText, isBullish } = parseChange(item['Change']);
-                const changeClass = isBullish ? 'bullish' : 'bearish';
-
-                card.innerHTML = `
-                    <div class="card-header">
-                        <span class="card-ticker">${item['Ticker'] || '-'}</span>
-                        <span class="card-change ${changeClass}">${changeText}</span>
-                    </div>
-                    <div class="card-company">${item['Company'] || '-'}</div>
-                    <div class="card-footer">
-                        <div class="card-footer-item">
-                            <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
-                            <span class="item-value" title="${item['Industry'] || '-'}">${item['Industry'] || '-'}</span>
-                        </div>
-                        <div class="card-footer-item">
-                            <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
-                            <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
-                        </div>
-                        <div class="card-footer-item">
-                            <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
-                            <span class="item-value">${item['Price'] || '-'}</span>
-                        </div>
-                        <div class="card-footer-item">
-                            <span class="item-label">${activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
-                            <span class="item-value">${item['P/E'] || '-'}</span>
-                        </div>
-                    </div>
-                `;
-
-                // Card click loads detail sheet
-                card.addEventListener('click', () => {
-                    openModal(item['Ticker']);
-                });
-                grid.appendChild(card);
-            });
-
+            renderOpportunities(currentOppsList);
             tabLoaded.opportunities = true;
         } catch (error) {
             console.error('Failed to load opportunities:', error);
             grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_opps}</div>`;
             lucide.createIcons();
         }
+    }
+
+    function renderOpportunities(list) {
+        const grid = document.getElementById('opps-grid');
+        grid.innerHTML = '';
+        
+        if (!list || list.length === 0) {
+            grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_opps}</div>`;
+            lucide.createIcons();
+            return;
+        }
+        
+        const sortedList = sortData(list, activeSortField, activeSortDirection);
+
+        sortedList.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'opp-card';
+            
+            const { formatted: changeText, isBullish } = parseChange(item['Change']);
+            const changeClass = isBullish ? 'bullish' : 'bearish';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="card-ticker">${item['Ticker'] || '-'}</span>
+                    <span class="card-change ${changeClass}">${changeText}</span>
+                </div>
+                <div class="card-company">${item['Company'] || '-'}</div>
+                <div class="card-footer">
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
+                        <span class="item-value" title="${item['Industry'] || '-'}">${item['Industry'] || '-'}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
+                        <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
+                        <span class="item-value">${item['Price'] || '-'}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
+                        <span class="item-value">${item['P/E'] || '-'}</span>
+                    </div>
+                </div>
+            `;
+
+            // Card click loads detail sheet
+            card.addEventListener('click', () => {
+                openModal(item['Ticker']);
+            });
+            grid.appendChild(card);
+        });
+
+        lucide.createIcons();
     }
 
     async function loadInsider(force = false) {
@@ -730,5 +782,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
         }
+    }
+
+    function sortData(list, field, direction) {
+        const sorted = [...list];
+        sorted.sort((a, b) => {
+            let valA, valB;
+            
+            if (field === 'marketcap') {
+                valA = a['Market Cap'] !== undefined && a['Market Cap'] !== null ? parseFloat(a['Market Cap']) : 0;
+                valB = b['Market Cap'] !== undefined && b['Market Cap'] !== null ? parseFloat(b['Market Cap']) : 0;
+                if (isNaN(valA)) valA = 0;
+                if (isNaN(valB)) valB = 0;
+            } else if (field === 'change') {
+                valA = a['Change'] !== undefined && a['Change'] !== null ? parseFloat(a['Change']) : 0;
+                valB = b['Change'] !== undefined && b['Change'] !== null ? parseFloat(b['Change']) : 0;
+                if (isNaN(valA)) valA = 0;
+                if (isNaN(valB)) valB = 0;
+            } else if (field === 'price') {
+                valA = a['Price'] !== undefined && a['Price'] !== null ? parseFloat(a['Price']) : 0;
+                valB = b['Price'] !== undefined && b['Price'] !== null ? parseFloat(b['Price']) : 0;
+                if (isNaN(valA)) valA = 0;
+                if (isNaN(valB)) valB = 0;
+            } else {
+                valA = String(a['Ticker'] || '').toUpperCase();
+                valB = String(b['Ticker'] || '').toUpperCase();
+            }
+            
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
     }
 });
