@@ -17,6 +17,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cache for stock details to allow instant modal transitions
     const stockCache = {};
 
+    // Helper to robustly parse and format FinViz percent/float changes
+    function parseChange(val) {
+        if (val === undefined || val === null || val === '') {
+            return { formatted: '0.00%', isBullish: true, percentVal: 0 };
+        }
+        
+        let num = 0;
+        let formatted = '';
+        
+        if (typeof val === 'number') {
+            num = val * 100;
+            const sign = num >= 0 ? '+' : '';
+            formatted = `${sign}${num.toFixed(2)}%`;
+        } else {
+            let str = String(val).trim();
+            if (str.endsWith('%')) {
+                formatted = str;
+                num = parseFloat(str);
+                if (!str.startsWith('-') && !str.startsWith('+') && num > 0) {
+                    formatted = '+' + str;
+                }
+            } else {
+                const parsed = parseFloat(str);
+                if (!isNaN(parsed)) {
+                    num = parsed * 100;
+                    const sign = num >= 0 ? '+' : '';
+                    formatted = `${sign}${num.toFixed(2)}%`;
+                } else {
+                    formatted = str;
+                    num = 0;
+                }
+            }
+        }
+        
+        const isBullish = num >= 0;
+        const percentVal = Math.min(Math.abs(num), 100);
+        
+        return { formatted, isBullish, percentVal };
+    }
+
     // Initializations
     lucide.createIcons();
     initTabs();
@@ -115,14 +155,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'opp-card';
                 
-                const rawChange = item['Change'] || '0.00%';
-                const isBullish = !rawChange.startsWith('-');
+                const { formatted: changeText, isBullish } = parseChange(item['Change']);
                 const changeClass = isBullish ? 'bullish' : 'bearish';
 
                 card.innerHTML = `
                     <div class="card-header">
                         <span class="card-ticker">${item['Ticker'] || '-'}</span>
-                        <span class="card-change ${changeClass}">${rawChange}</span>
+                        <span class="card-change ${changeClass}">${changeText}</span>
                     </div>
                     <div class="card-company">${item['Company'] || '-'}</div>
                     <div class="card-footer">
@@ -238,9 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'sector-card';
 
-                const rawChange = item['Change'] || '0.00%';
-                const isBullish = !rawChange.startsWith('-');
-                const percentVal = Math.min(Math.abs(parseFloat(rawChange) * 100), 100);
+                const { formatted: changeText, isBullish, percentVal } = parseChange(item['Change']);
                 const barColor = isBullish ? 'bullish' : 'bearish';
 
                 card.innerHTML = `
@@ -259,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="sector-metric">
                         <span class="item-label">Avg Change</span>
-                        <span class="item-value" style="color: var(--${barColor}); font-weight:600;">${rawChange}</span>
+                        <span class="item-value" style="color: var(--${barColor}); font-weight:600;">${changeText}</span>
                     </div>
                     <div class="sector-perf-bar">
                         <div class="sector-perf-fill ${barColor}" style="width: ${percentVal}%"></div>
@@ -333,10 +370,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('m-rsi').innerText = f['RSI (14)'] || '-';
             document.getElementById('m-price').innerText = f['Price'] || '-';
             
-            const rawChange = f['Change'] || '0.00%';
+            const { formatted: changeText, isBullish } = parseChange(f['Change']);
             const mChange = document.getElementById('m-change');
-            mChange.innerText = rawChange;
-            mChange.className = 'm-value ' + (rawChange.startsWith('-') ? 'bearish' : 'bullish');
+            mChange.innerText = changeText;
+            mChange.className = 'm-value ' + (isBullish ? 'bullish' : 'bearish');
 
             // Render Peers
             const peersContainer = document.getElementById('modal-peers');
