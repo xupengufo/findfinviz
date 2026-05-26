@@ -57,8 +57,41 @@ document.addEventListener('DOMContentLoaded', () => {
         return { formatted, isBullish, percentVal };
     }
 
+// Theme Management
+    let savedTheme = localStorage.getItem('theme');
+    if (!savedTheme) {
+        savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        const sun = document.querySelector('.theme-icon-sun');
+        const moon = document.querySelector('.theme-icon-moon');
+        if (sun && moon) {
+            if (theme === 'dark') {
+                sun.style.display = 'block';
+                moon.style.display = 'none';
+            } else {
+                sun.style.display = 'none';
+                moon.style.display = 'block';
+            }
+        }
+    }
+
     // Initializations
     lucide.createIcons();
+    setTheme(savedTheme);
+
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(nextTheme);
+        });
+    }
+
     initTabs();
     initSelectors();
     loadOpportunities(); // Load default view
