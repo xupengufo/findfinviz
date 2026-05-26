@@ -5,3 +5,4 @@ lxml
 beautifulsoup4
 requests
 uvicorn
+redis
