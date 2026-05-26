@@ -539,16 +539,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 return valB - valA;
             });
 
-            grid.innerHTML = '';
+            // Calculate summary statistics
+            let strongest = null;
+            let weakest = null;
+            let upCount = 0;
+            let downCount = 0;
+            
             sortedList.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'sector-card';
+                const changeVal = parseFloat(item['Change']) || 0;
+                if (changeVal >= 0) {
+                    upCount++;
+                } else {
+                    downCount++;
+                }
+                
+                if (!strongest || changeVal > parseFloat(strongest['Change'])) {
+                    strongest = item;
+                }
+                if (!weakest || changeVal < parseFloat(weakest['Change'])) {
+                    weakest = item;
+                }
+            });
 
-                const { formatted: changeText, isBullish, percentVal } = parseChange(item['Change']);
-                const barColor = isBullish ? 'bullish' : 'bearish';
-
-                // Map sector names if Chinese is active
-                let sectorName = item['Name'] || '-';
+            const getSectorName = (name) => {
                 if (activeLang === 'zh') {
                     const sectorMapping = {
                         'Technology': '科技',
@@ -563,7 +576,68 @@ document.addEventListener('DOMContentLoaded', () => {
                         'Basic Materials': '基础材料',
                         'Utilities': '公用事业'
                     };
-                    sectorName = sectorMapping[sectorName] || sectorName;
+                    return sectorMapping[name] || name;
+                }
+                return name;
+            };
+
+            const summaryContainer = document.getElementById('sectors-summary');
+            if (summaryContainer && strongest && weakest) {
+                const strongName = getSectorName(strongest['Name']);
+                const strongChange = parseChange(strongest['Change']).formatted;
+                
+                const weakName = getSectorName(weakest['Name']);
+                const weakChange = parseChange(weakest['Change']).formatted;
+                
+                const totalSectors = sortedList.length;
+                const ratioText = activeLang === 'zh' 
+                    ? `${upCount} 板块上涨 / ${downCount} 下跌` 
+                    : `${upCount} Up / ${downCount} Down`;
+
+                summaryContainer.innerHTML = `
+                    <div class="summary-chip">
+                        <span class="summary-chip-title">${activeLang === 'zh' ? '今日最强板块' : 'Top Performing Sector'}</span>
+                        <span class="summary-chip-val" style="color: var(--positive);">${strongName}</span>
+                        <span class="summary-chip-sub">${strongChange}</span>
+                    </div>
+                    <div class="summary-chip">
+                        <span class="summary-chip-title">${activeLang === 'zh' ? '今日最弱板块' : 'Worst Performing Sector'}</span>
+                        <span class="summary-chip-val" style="color: var(--negative);">${weakName}</span>
+                        <span class="summary-chip-sub">${weakChange}</span>
+                    </div>
+                    <div class="summary-chip">
+                        <span class="summary-chip-title">${activeLang === 'zh' ? '板块上涨下跌比' : 'Market Breadth'}</span>
+                        <span class="summary-chip-val">${ratioText}</span>
+                        <span class="summary-chip-sub">${activeLang === 'zh' ? `共 ${totalSectors} 个板块` : `Total ${totalSectors} Sectors`}</span>
+                    </div>
+                `;
+            }
+
+            grid.innerHTML = '';
+            sortedList.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'sector-card';
+
+                const { formatted: changeText, isBullish } = parseChange(item['Change']);
+                const barColor = isBullish ? 'bullish' : 'bearish';
+                const textValColor = isBullish ? 'positive' : 'negative';
+
+                // Map sector names if Chinese is active
+                const sectorName = getSectorName(item['Name']);
+
+                // Calculate bidirectional width based on max range of ±3%
+                let changeNum = parseFloat(item['Change']);
+                if (isNaN(changeNum)) changeNum = 0;
+                
+                const changePct = changeNum * 100;
+                const maxPct = 3.0; // limit scale at ±3%
+                const barWidthPct = Math.min(Math.abs(changePct) / maxPct, 1.0) * 50; // max 50% of the bar width
+                
+                let barStyle = '';
+                if (isBullish) {
+                    barStyle = `left: 50%; width: ${barWidthPct}%;`;
+                } else {
+                    barStyle = `left: ${50 - barWidthPct}%; width: ${barWidthPct}%;`;
                 }
 
                 card.innerHTML = `
@@ -582,10 +656,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="sector-metric">
                         <span class="item-label">${translations[activeLang].metric_avg_change}</span>
-                        <span class="item-value" style="color: var(--${barColor}); font-weight:600;">${changeText}</span>
+                        <span class="item-value" style="color: var(--${textValColor}); font-weight:600;">${changeText}</span>
                     </div>
                     <div class="sector-perf-bar">
-                        <div class="sector-perf-fill ${barColor}" style="width: ${percentVal}%"></div>
+                        <div class="sector-perf-center"></div>
+                        <div class="sector-perf-fill ${barColor}" style="${barStyle}"></div>
                     </div>
                 `;
                 grid.appendChild(card);
