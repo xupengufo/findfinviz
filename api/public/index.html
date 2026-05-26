@@ -25,13 +25,13 @@
                 <nav class="page-nav-tabs">
                     <div class="page-nav-tabs-scroll">
                         <button class="nav-btn active" data-tab="opportunities">
-                            <i data-lucide="compass"></i> <span>Opportunities</span>
+                            <i data-lucide="compass"></i> <span data-i18n="tab_opps">Opportunities</span>
                         </button>
                         <button class="nav-btn" data-tab="insider">
-                            <i data-lucide="shield-alert"></i> <span>Insider Sentiment</span>
+                            <i data-lucide="shield-alert"></i> <span data-i18n="tab_insider">Insider Sentiment</span>
                         </button>
                         <button class="nav-btn" data-tab="sectors">
-                            <i data-lucide="layers"></i> <span>Sector Strengths</span>
+                            <i data-lucide="layers"></i> <span data-i18n="tab_sectors">Sector Strengths</span>
                         </button>
                     </div>
                 </nav>
@@ -39,8 +39,11 @@
                 <div class="page-nav-right">
                     <div class="status-chip status-chip-positive">
                         <span class="status-pulse-dot"></span>
-                        <span class="status-text">Live Cache</span>
+                        <span class="status-text" data-i18n="live_cache">Live Cache</span>
                     </div>
+                    <button id="lang-toggle" class="plain-button" aria-label="Toggle language" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; width: 32px; height: 32px; border-radius: 50%;">
+                        EN
+                    </button>
                     <button id="theme-toggle" class="plain-button" aria-label="Toggle theme">
                         <i data-lucide="sun" class="theme-icon-sun"></i>
                         <i data-lucide="moon" class="theme-icon-moon" style="display: none;"></i>
@@ -56,15 +59,15 @@
                 <div class="filter-bar">
                     <div class="filter-title">
                         <i data-lucide="sliders"></i>
-                        <h2>Technical Scanner</h2>
+                        <h2 data-i18n="scanner_title">Technical Scanner</h2>
                     </div>
                     <div class="signal-selector segmented">
-                        <button class="signal-btn active" data-signal="oversold">Oversold</button>
-                        <button class="signal-btn" data-signal="double_bottom">Double Bottom</button>
-                        <button class="signal-btn" data-signal="wedge_down">Wedge Down</button>
-                        <button class="signal-btn" data-signal="triangle_ascending">Triangle Ascending</button>
-                        <button class="signal-btn" data-signal="top_gainers">Top Gainers</button>
-                        <button class="signal-btn" data-signal="new_high">New High</button>
+                        <button class="signal-btn active" data-signal="oversold" data-i18n="sig_oversold">Oversold</button>
+                        <button class="signal-btn" data-signal="double_bottom" data-i18n="sig_double_bottom">Double Bottom</button>
+                        <button class="signal-btn" data-signal="wedge_down" data-i18n="sig_wedge_down">Wedge Down</button>
+                        <button class="signal-btn" data-signal="triangle_ascending" data-i18n="sig_triangle_ascending">Triangle Ascending</button>
+                        <button class="signal-btn" data-signal="top_gainers" data-i18n="sig_top_gainers">Top Gainers</button>
+                        <button class="signal-btn" data-signal="new_high" data-i18n="sig_new_high">New High</button>
                     </div>
                 </div>
 
@@ -82,12 +85,12 @@
                 <div class="filter-bar">
                     <div class="filter-title">
                         <i data-lucide="trending-up"></i>
-                        <h2>Executive & Insider Trades</h2>
+                        <h2 data-i18n="insider_title">Executive & Insider Trades</h2>
                     </div>
                     <div class="option-selector segmented">
-                        <button class="option-btn active" data-option="top owner trade">Top Owner Trades</button>
-                        <button class="option-btn" data-option="latest">Latest Transactions</button>
-                        <button class="option-btn" data-option="top week">Top Week</button>
+                        <button class="option-btn active" data-option="top owner trade" data-i18n="opt_top_owner">Top Owner Trades</button>
+                        <button class="option-btn" data-option="latest" data-i18n="opt_latest">Latest Transactions</button>
+                        <button class="option-btn" data-option="top week" data-i18n="opt_top_week">Top Week</button>
                     </div>
                 </div>
 
@@ -95,15 +98,15 @@
                     <table class="premium-table">
                         <thead>
                             <tr>
-                                <th>Ticker</th>
-                                <th>Relationship</th>
-                                <th>Date</th>
-                                <th>Transaction</th>
-                                <th>Cost ($)</th>
-                                <th>Shares</th>
-                                <th>Value ($)</th>
-                                <th>Total Shares</th>
-                                <th>SEC Form 4</th>
+                                <th data-i18n="th_ticker">Ticker</th>
+                                <th data-i18n="th_relation">Relationship</th>
+                                <th data-i18n="th_date">Date</th>
+                                <th data-i18n="th_txn">Transaction</th>
+                                <th data-i18n="th_cost">Cost ($)</th>
+                                <th data-i18n="th_shares">Shares</th>
+                                <th data-i18n="th_value">Value ($)</th>
+                                <th data-i18n="th_total_shares">Total Shares</th>
+                                <th data-i18n="th_sec_form">SEC Form 4</th>
                             </tr>
                         </thead>
                         <tbody id="insider-table-body">
@@ -118,7 +121,7 @@
                 <div class="filter-bar">
                     <div class="filter-title">
                         <i data-lucide="pie-chart"></i>
-                        <h2>Sector Strength & Performance Matrix</h2>
+                        <h2 data-i18n="sectors_title">Sector Strength & Performance Matrix</h2>
                     </div>
                 </div>
 
@@ -149,45 +152,45 @@
                 <div class="modal-left-col">
                     <div class="metrics-grid">
                         <div class="metric-card">
-                            <span class="m-label">Market Cap</span>
+                            <span class="m-label" data-i18n="modal_mcap">Market Cap</span>
                             <span class="m-value font-data" id="m-mcap">-</span>
                         </div>
                         <div class="metric-card">
-                            <span class="m-label">P/E Ratio</span>
+                            <span class="m-label" data-i18n="modal_pe">P/E Ratio</span>
                             <span class="m-value font-data" id="m-pe">-</span>
                         </div>
                         <div class="metric-card">
-                            <span class="m-label">Short Float</span>
+                            <span class="m-label" data-i18n="modal_sfloat">Short Float</span>
                             <span class="m-value font-data" id="m-sfloat">-</span>
                         </div>
                         <div class="metric-card">
-                            <span class="m-label">RSI (14)</span>
+                            <span class="m-label" data-i18n="modal_rsi">RSI (14)</span>
                             <span class="m-value font-data" id="m-rsi">-</span>
                         </div>
                         <div class="metric-card">
-                            <span class="m-label">Price</span>
+                            <span class="m-label" data-i18n="modal_price">Price</span>
                             <span class="m-valueHighlight font-data" id="m-price">-</span>
                         </div>
                         <div class="metric-card">
-                            <span class="m-label">Change</span>
+                            <span class="m-label" data-i18n="modal_change">Change</span>
                             <span class="m-value font-data" id="m-change">-</span>
                         </div>
                     </div>
 
                     <div class="modal-detail-panel">
-                        <h3>Company Profile</h3>
+                        <h3 data-i18n="modal_profile">Company Profile</h3>
                         <p id="modal-desc">Loading description...</p>
                     </div>
 
                     <div class="modal-detail-panel">
-                        <h3>Sector Peers</h3>
+                        <h3 data-i18n="modal_peers">Sector Peers</h3>
                         <div id="modal-peers" class="tag-container">
                             <!-- Peer buttons -->
                         </div>
                     </div>
 
                     <div class="modal-detail-panel">
-                        <h3>Top ETF Holdings</h3>
+                        <h3 data-i18n="modal_etfs">Top ETF Holders</h3>
                         <div id="modal-etfs" class="tag-container">
                             <!-- ETF tags -->
                         </div>
@@ -197,17 +200,17 @@
                 <!-- Right Column: Chart & News -->
                 <div class="modal-right-col">
                     <div class="chart-container">
-                        <h3>Technical Chart (Daily Candles)</h3>
+                        <h3 data-i18n="modal_chart">Technical Chart (Daily Candles)</h3>
                         <div class="chart-wrapper">
                             <img id="modal-chart-img" src="" alt="Stock Technical Chart">
                         </div>
                         <div class="chart-links">
-                            <a id="tv-link" href="#" target="_blank" class="tv-btn"><i data-lucide="external-link"></i> View on TradingView</a>
+                            <a id="tv-link" href="#" target="_blank" class="tv-btn"><i data-lucide="external-link"></i> <span data-i18n="modal_tv">View on TradingView</span></a>
                         </div>
                     </div>
 
                     <div class="modal-detail-panel news-section">
-                        <h3>Recent News Feed</h3>
+                        <h3 data-i18n="modal_news">Recent News Feed</h3>
                         <div id="modal-news-list" class="news-list">
                             <!-- News links -->
                         </div>

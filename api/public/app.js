@@ -17,6 +17,171 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cache for stock details to allow instant modal transitions
     const stockCache = {};
 
+    // Translations Dictionary
+    const translations = {
+        en: {
+            tab_opps: "Opportunities",
+            tab_insider: "Insider Sentiment",
+            tab_sectors: "Sector Strengths",
+            live_cache: "Live Cache",
+            scanner_title: "Technical Scanner",
+            insider_title: "Executive & Insider Trades",
+            sectors_title: "Sector Strength & Performance Matrix",
+            sig_oversold: "Oversold",
+            sig_double_bottom: "Double Bottom",
+            sig_wedge_down: "Wedge Down",
+            sig_triangle_ascending: "Triangle Ascending",
+            sig_top_gainers: "Top Gainers",
+            sig_new_high: "New High",
+            opt_top_owner: "Top Owner Trades",
+            opt_latest: "Latest Transactions",
+            opt_top_week: "Top Week",
+            th_ticker: "Ticker",
+            th_relation: "Relationship",
+            th_date: "Date",
+            th_txn: "Transaction",
+            th_cost: "Cost ($)",
+            th_shares: "Shares",
+            th_value: "Value ($)",
+            th_total_shares: "Total Shares",
+            th_sec_form: "SEC Form 4",
+            metric_stocks: "Stocks Count",
+            metric_mcap: "Market Cap",
+            metric_recom: "Recom",
+            metric_avg_change: "Avg Change",
+            modal_mcap: "Market Cap",
+            modal_pe: "P/E Ratio",
+            modal_sfloat: "Short Float",
+            modal_rsi: "RSI (14)",
+            modal_price: "Price",
+            modal_change: "Change",
+            modal_profile: "Company Profile",
+            modal_peers: "Sector Peers",
+            modal_etfs: "Top ETF Holders",
+            modal_chart: "Technical Chart (Daily Candles)",
+            modal_tv: "View on TradingView",
+            modal_news: "Recent News Feed",
+            
+            // Dynamic content
+            loading_opps: "Loading opportunities...",
+            no_opps: "No stocks matching this signal at the moment.",
+            err_opps: "Error: Failed to fetch opportunities from the API.",
+            loading_insider: "Loading transactions...",
+            no_insider: "No transactions found.",
+            err_insider: "Error loading transaction records.",
+            loading_sectors: "Loading sector performance...",
+            err_sectors: "Error loading sector strength matrix.",
+            txn_buy: "BUY",
+            txn_sell: "SELL",
+            modal_loading_company: "Loading company details...",
+            modal_loading_desc: "Downloading profile description...",
+            modal_no_desc: "No description available.",
+            modal_no_peers: "No peers identified.",
+            modal_no_etfs: "No ETF records.",
+            modal_loading_news: "Loading news...",
+            modal_no_news: "No recent news coverage found.",
+            modal_err_company: "Error loading company data",
+            modal_err_desc: "Could not load profile description from the API."
+        },
+        zh: {
+            tab_opps: "技术选股",
+            tab_insider: "大股东动向",
+            tab_sectors: "板块热力",
+            live_cache: "云端缓存",
+            scanner_title: "技术选股指标",
+            insider_title: "大股东与高管交易流",
+            sectors_title: "美股板块强弱表现",
+            sig_oversold: "超卖突破 (RSI < 30)",
+            sig_double_bottom: "双底构筑",
+            sig_wedge_down: "下降楔形",
+            sig_triangle_ascending: "上升三角形",
+            sig_top_gainers: "最大涨幅",
+            sig_new_high: "创历史新高",
+            opt_top_owner: "大股东交易排行",
+            opt_latest: "最新交易快讯",
+            opt_top_week: "本周大额排行",
+            th_ticker: "代码",
+            th_relation: "交易人职位",
+            th_date: "交易日期",
+            th_txn: "交易性质",
+            th_cost: "交易单价",
+            th_shares: "股数",
+            th_value: "总金额 ($)",
+            th_total_shares: "持股总量",
+            th_sec_form: "备案申报",
+            metric_stocks: "成份股数",
+            metric_mcap: "行业总市值",
+            metric_recom: "买入评级",
+            metric_avg_change: "平均涨跌",
+            modal_mcap: "市值",
+            modal_pe: "市盈率 P/E",
+            modal_sfloat: "空头占比",
+            modal_rsi: "RSI 指标 (14)",
+            modal_price: "当前价",
+            modal_change: "今日变动",
+            modal_profile: "公司简介",
+            modal_peers: "同板块股票 Peers",
+            modal_etfs: "持股主要 ETF",
+            modal_chart: "日线 K 线图 (技术分析)",
+            modal_tv: "在 TradingView 中查看",
+            modal_news: "最新财经新闻",
+            
+            // Dynamic content
+            loading_opps: "正在加载选股列表...",
+            no_opps: "当前该信号下无匹配的股票。",
+            err_opps: "错误：无法从 API 获取股票数据。",
+            loading_insider: "正在加载高管交易流...",
+            no_insider: "未找到交易记录。",
+            err_insider: "错误：无法加载交易记录。",
+            loading_sectors: "正在加载板块热力图...",
+            err_sectors: "错误：无法加载板块表现矩阵。",
+            txn_buy: "买入",
+            txn_sell: "卖出",
+            modal_loading_company: "正在加载公司基本面...",
+            modal_loading_desc: "正在下载公司简介...",
+            modal_no_desc: "暂无公司简介数据。",
+            modal_no_peers: "暂无同业股票推荐。",
+            modal_no_etfs: "暂无持股 ETF 记录。",
+            modal_loading_news: "正在加载新闻报道...",
+            modal_no_news: "暂无相关新闻报道。",
+            modal_err_company: "加载公司数据错误",
+            modal_err_desc: "无法从接口下载公司简介描述。"
+        }
+    };
+
+    // Language Management
+    let activeLang = localStorage.getItem('lang');
+    if (!activeLang) {
+        const navLang = navigator.language || navigator.userLanguage || 'en';
+        activeLang = navLang.startsWith('zh') ? 'zh' : 'en';
+    }
+
+    function setLanguage(lang) {
+        activeLang = lang;
+        localStorage.setItem('lang', lang);
+        document.documentElement.setAttribute('lang', lang);
+
+        // Update static elements with data-i18n
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const text = translations[lang][key];
+            if (text) {
+                el.textContent = text;
+            }
+        });
+
+        // Update Toggle button UI
+        const langBtn = document.getElementById('lang-toggle');
+        if (langBtn) {
+            langBtn.textContent = lang === 'zh' ? '中' : 'EN';
+        }
+
+        // Force reload active data elements to update dynamic texts
+        if (tabLoaded.opportunities) loadOpportunities(true);
+        if (tabLoaded.insider) loadInsider(true);
+        if (tabLoaded.sectors) loadSectors(true);
+    }
+
     // Helper to robustly parse and format FinViz percent/float changes
     function parseChange(val) {
         if (val === undefined || val === null || val === '') {
@@ -57,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { formatted, isBullish, percentVal };
     }
 
-// Theme Management
+    // Theme Management
     let savedTheme = localStorage.getItem('theme');
     if (!savedTheme) {
         savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -82,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initializations
     lucide.createIcons();
     setTheme(savedTheme);
+    setLanguage(activeLang);
 
     const themeToggleBtn = document.getElementById('theme-toggle');
     if (themeToggleBtn) {
@@ -89,6 +255,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
             setTheme(nextTheme);
+        });
+    }
+
+    const langToggleBtn = document.getElementById('lang-toggle');
+    if (langToggleBtn) {
+        langToggleBtn.addEventListener('click', () => {
+            const nextLang = activeLang === 'zh' ? 'en' : 'zh';
+            setLanguage(nextLang);
         });
     }
 
@@ -179,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             grid.innerHTML = '';
             if (list.length === 0) {
-                grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> No stocks matching this signal at the moment.</div>`;
+                grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_opps}</div>`;
                 lucide.createIcons();
                 return;
             }
@@ -199,19 +373,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-company">${item['Company'] || '-'}</div>
                     <div class="card-footer">
                         <div class="card-footer-item">
-                            <span class="item-label">Industry</span>
+                            <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
                             <span class="item-value" title="${item['Industry'] || '-'}">${item['Industry'] || '-'}</span>
                         </div>
                         <div class="card-footer-item">
-                            <span class="item-label">Market Cap</span>
+                            <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
                             <span class="item-value">${item['Market Cap'] || '-'}</span>
                         </div>
                         <div class="card-footer-item">
-                            <span class="item-label">Price</span>
+                            <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
                             <span class="item-value">${item['Price'] || '-'}</span>
                         </div>
                         <div class="card-footer-item">
-                            <span class="item-label">P/E</span>
+                            <span class="item-label">${activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
                             <span class="item-value">${item['P/E'] || '-'}</span>
                         </div>
                     </div>
@@ -227,7 +401,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tabLoaded.opportunities = true;
         } catch (error) {
             console.error('Failed to load opportunities:', error);
-            grid.innerHTML = `<div class="error-msg">Error: Failed to fetch opportunities from the API.</div>`;
+            grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_opps}</div>`;
+            lucide.createIcons();
         }
     }
 
@@ -235,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabLoaded.insider && !force) return;
 
         const tbody = document.getElementById('insider-table-body');
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Loading transactions...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">${translations[activeLang].loading_insider}</td></tr>`;
 
         try {
             const res = await fetch(`${API_BASE}/api/insiders?option=${encodeURIComponent(activeInsiderOption)}`);
@@ -244,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tbody.innerHTML = '';
             if (list.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center;">No transactions found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center;">${translations[activeLang].no_insider}</td></tr>`;
                 return;
             }
 
@@ -254,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Format transaction Type (Buy / Sell)
                 const isBuy = (item['Relationship'] && item['Transaction'].toLowerCase().includes('buy')) || rawVal > 0;
-                const txnText = isBuy ? 'BUY' : 'SELL';
+                const txnText = isBuy ? translations[activeLang].txn_buy : translations[activeLang].txn_sell;
                 const txnClass = isBuy ? 'txn-buy' : 'txn-sell';
 
                 tr.innerHTML = `
@@ -286,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tabLoaded.insider = true;
         } catch (error) {
             console.error('Failed to load insider:', error);
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--bearish);">Error loading transaction records.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--bearish);">${translations[activeLang].err_insider}</td></tr>`;
         }
     }
 
@@ -313,22 +488,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { formatted: changeText, isBullish, percentVal } = parseChange(item['Change']);
                 const barColor = isBullish ? 'bullish' : 'bearish';
 
+                // Map sector names if Chinese is active
+                let sectorName = item['Name'] || '-';
+                if (activeLang === 'zh') {
+                    const sectorMapping = {
+                        'Technology': '科技',
+                        'Financial': '金融',
+                        'Healthcare': '医疗保健',
+                        'Consumer Cyclical': '周期性消费',
+                        'Industrials': '工业',
+                        'Communication Services': '通讯服务',
+                        'Consumer Defensive': '防御性消费',
+                        'Energy': '能源',
+                        'Real Estate': '房地产',
+                        'Basic Materials': '基础材料',
+                        'Utilities': '公用事业'
+                    };
+                    sectorName = sectorMapping[sectorName] || sectorName;
+                }
+
                 card.innerHTML = `
-                    <div class="sector-name">${item['Name'] || '-'}</div>
+                    <div class="sector-name">${sectorName}</div>
                     <div class="sector-metric">
-                        <span class="item-label">Stocks Count</span>
+                        <span class="item-label">${translations[activeLang].metric_stocks}</span>
                         <span class="item-value">${item['Stocks'] || '-'}</span>
                     </div>
                     <div class="sector-metric">
-                        <span class="item-label">Market Cap</span>
+                        <span class="item-label">${translations[activeLang].metric_mcap}</span>
                         <span class="item-value">${item['Market Cap'] || '-'}</span>
                     </div>
                     <div class="sector-metric">
-                        <span class="item-label">Recom</span>
+                        <span class="item-label">${translations[activeLang].metric_recom}</span>
                         <span class="item-value">${item['Recom'] || '-'}</span>
                     </div>
                     <div class="sector-metric">
-                        <span class="item-label">Avg Change</span>
+                        <span class="item-label">${translations[activeLang].metric_avg_change}</span>
                         <span class="item-value" style="color: var(--${barColor}); font-weight:600;">${changeText}</span>
                     </div>
                     <div class="sector-perf-bar">
@@ -341,7 +535,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tabLoaded.sectors = true;
         } catch (error) {
             console.error('Failed to load sectors:', error);
-            grid.innerHTML = `<div class="error-msg">Error loading sector strength matrix.</div>`;
+            grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_sectors}</div>`;
+            lucide.createIcons();
         }
     }
 
@@ -355,13 +550,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set Loading state on elements
         document.getElementById('modal-ticker').innerText = ticker;
-        document.getElementById('modal-company').innerText = 'Loading company details...';
+        document.getElementById('modal-company').innerText = translations[activeLang].modal_loading_company;
         document.getElementById('modal-sector').innerText = '-';
         document.getElementById('modal-industry').innerText = '-';
-        document.getElementById('modal-desc').innerText = 'Downloading profile description...';
+        document.getElementById('modal-desc').innerText = translations[activeLang].modal_loading_desc;
         document.getElementById('modal-peers').innerHTML = '';
         document.getElementById('modal-etfs').innerHTML = '';
-        document.getElementById('modal-news-list').innerHTML = '<div style="color: var(--text-dark)">Loading news...</div>';
+        document.getElementById('modal-news-list').innerHTML = `<div style="color: var(--text-dark)">${translations[activeLang].modal_loading_news}</div>`;
         
         // Setup initial static FinViz Chart
         const chartImg = document.getElementById('modal-chart-img');
@@ -392,9 +587,29 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Populate basic info
             document.getElementById('modal-company').innerText = f['Company'] || ticker;
-            document.getElementById('modal-sector').innerText = f['Sector'] || '-';
-            document.getElementById('modal-industry').innerText = f['Industry'] || '-';
-            document.getElementById('modal-desc').innerText = stockData.description || 'No description available.';
+            
+            let sectorVal = f['Sector'] || '-';
+            let industryVal = f['Industry'] || '-';
+            if (activeLang === 'zh') {
+                const sectorMapping = {
+                    'Technology': '科技',
+                    'Financial': '金融',
+                    'Healthcare': '医疗保健',
+                    'Consumer Cyclical': '周期性消费',
+                    'Industrials': '工业',
+                    'Communication Services': '通讯服务',
+                    'Consumer Defensive': '防御性消费',
+                    'Energy': '能源',
+                    'Real Estate': '房地产',
+                    'Basic Materials': '基础材料',
+                    'Utilities': '公用事业'
+                };
+                sectorVal = sectorMapping[sectorVal] || sectorVal;
+            }
+            
+            document.getElementById('modal-sector').innerText = sectorVal;
+            document.getElementById('modal-industry').innerText = industryVal;
+            document.getElementById('modal-desc').innerText = stockData.description || translations[activeLang].modal_no_desc;
 
             // Populate metrics
             document.getElementById('m-mcap').innerText = f['Market Cap'] || '-';
@@ -422,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     peersContainer.appendChild(btn);
                 });
             } else {
-                peersContainer.innerText = 'No peers identified.';
+                peersContainer.innerText = translations[activeLang].modal_no_peers;
             }
 
             // Render ETFs
@@ -436,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     etfsContainer.appendChild(tag);
                 });
             } else {
-                etfsContainer.innerText = 'No ETF records.';
+                etfsContainer.innerText = translations[activeLang].modal_no_etfs;
             }
 
             // Render News Feed
@@ -465,13 +680,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     newsContainer.appendChild(item);
                 });
             } else {
-                newsContainer.innerHTML = '<div style="color: var(--text-dark)">No recent news coverage found.</div>';
+                newsContainer.innerHTML = `<div style="color: var(--text-dark)">${translations[activeLang].modal_no_news}</div>`;
             }
 
         } catch (error) {
             console.error('Failed to load stock details:', error);
-            document.getElementById('modal-company').innerText = 'Error loading company data';
-            document.getElementById('modal-desc').innerText = 'Could not load profile description from the API.';
+            document.getElementById('modal-company').innerText = translations[activeLang].modal_err_company;
+            document.getElementById('modal-desc').innerText = translations[activeLang].modal_err_desc;
         }
     }
 
