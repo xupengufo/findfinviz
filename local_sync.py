@@ -19,11 +19,27 @@ if os.path.exists(env_file):
 else:
     print(f"Warning: {env_file} not found. Ensure KV_REST_API_URL and KV_REST_API_TOKEN are set in your environment.")
 
-kv_url = os.environ.get("KV_REST_API_URL")
-kv_token = os.environ.get("KV_REST_API_TOKEN")
+import redis
 
-if not kv_url or not kv_token:
-    print("Error: Vercel KV credentials missing. Please link your Vercel KV database and run 'vercel env pull .env.local --yes' again.")
+redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
+is_redis_rest = False
+client = None
+
+if redis_url:
+    if redis_url.startswith("http"):
+        is_redis_rest = True
+        kv_url = redis_url
+        kv_token = os.environ.get("KV_REST_API_TOKEN")
+        headers = {"Authorization": f"Bearer {kv_token}"}
+    else:
+        try:
+            client = redis.from_url(redis_url, decode_responses=True)
+            print("Connected to Redis server.")
+        except Exception as e:
+            print("Failed to connect to Redis server:", e)
+            sys.exit(1)
+else:
+    print("Error: Vercel Redis credentials missing. Please link your Vercel Redis database and run 'vercel env pull .env.local --yes' again.")
     sys.exit(1)
 
 # Import local finvizfinance package
@@ -32,22 +48,29 @@ from finvizfinance.insider import Insider
 from finvizfinance.screener.overview import Overview
 from finvizfinance.group.overview import Overview as GroupOverview
 
-headers = {"Authorization": f"Bearer {kv_token}"}
-
-def push_to_kv(key, data, expires_in=172800): # Default 48 hours cache on KV for safety
+def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV for safety
     val_str = json.dumps(data)
-    url = f"{kv_url}/set/{key}?ex={expires_in}"
-    try:
-        res = requests.post(url, headers=headers, data=val_str, timeout=10)
-        if res.status_code == 200 and res.json().get("result") == "OK":
-            print(f"Successfully pushed key '{key}' to Vercel KV.")
-            return True
-        else:
-            print(f"Failed to push key '{key}':", res.status_code, res.text)
+    if is_redis_rest:
+        url = f"{kv_url}/set/{key}?ex={expires_in}"
+        try:
+            res = requests.post(url, headers=headers, data=val_str, timeout=10)
+            if res.status_code == 200 and res.json().get("result") == "OK":
+                print(f"Successfully pushed key '{key}' to Vercel KV (REST).")
+                return True
+            else:
+                print(f"Failed to push key '{key}' (REST):", res.status_code, res.text)
+                return False
+        except Exception as e:
+            print(f"Error pushing key '{key}' (REST):", e)
             return False
-    except Exception as e:
-        print(f"Error pushing key '{key}':", e)
-        return False
+    else:
+        try:
+            client.setex(key, expires_in, val_str)
+            print(f"Successfully pushed key '{key}' to Vercel Redis.")
+            return True
+        except Exception as e:
+            print(f"Error pushing key '{key}' to Redis:", e)
+            return False
 
 def sync_opportunities():
     signals = {
