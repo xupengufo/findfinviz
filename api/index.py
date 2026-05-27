@@ -86,6 +86,18 @@ class FallbackCache:
                         return json.loads(val)
             except Exception as e:
                 print("Redis cache get error:", e)
+            
+            # Redis key not found or failed, fallback to local SQLite cache
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM cache WHERE key = ?", (key,))
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    return json.loads(row[0])
+            except Exception as sq_err:
+                print("Redis-to-SQLite fallback cache get error:", sq_err)
             return None
         else:
             try:
