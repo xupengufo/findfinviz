@@ -159,7 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
             loading_confluences: "Computing smart setups...",
             no_confluences: "No confluence setups matching criteria right now.",
             err_confluences: "Error: Failed to fetch confluences from API.",
-            confluence_cache_empty: "The Smart Picks cache is empty. Please run sync first to populate it."
+            confluence_cache_empty: "The Smart Picks cache is empty. Please run sync first to populate it.",
+            modal_score_breakdown: "Resonance Score Breakdown",
+            breakdown_tech: "Technical Structure",
+            breakdown_fund: "Fundamentals & Insiders",
+            breakdown_sent: "Market Sentiment & Flow",
+            sector_industries_title: "Industries in Sector",
+            sector_top_opportunities: "Top Confluence Opportunities",
+            industry_name: "Industry",
+            industry_change: "Change",
+            industry_stocks: "Stocks"
         },
         zh: {
             tab_opps: "技术选股",
@@ -259,7 +268,16 @@ document.addEventListener('DOMContentLoaded', () => {
             loading_confluences: "正在挖掘多维共振股票...",
             no_confluences: "当前未发现符合共振筛选标准的股票。",
             err_confluences: "错误：无法加载智能共振选股数据。",
-            confluence_cache_empty: "智能共振选股缓存为空。请运行数据同步以生成共振推荐列表。"
+            confluence_cache_empty: "智能共振选股缓存为空。请运行数据同步以生成共振推荐列表。",
+            modal_score_breakdown: "多维共振得分拆解",
+            breakdown_tech: "技术形态结构",
+            breakdown_fund: "基本面与内部人",
+            breakdown_sent: "市场情绪与资金流",
+            sector_industries_title: "板块细分行业表现",
+            sector_top_opportunities: "板块内共振机会个股",
+            industry_name: "细分行业",
+            industry_change: "今日涨跌",
+            industry_stocks: "成份股数"
         }
     };
 
@@ -511,6 +529,19 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('.close-modal-btn').addEventListener('click', closeModal);
         document.getElementById('ticker-modal').addEventListener('click', (e) => {
             if (e.target.id === 'ticker-modal') closeModal();
+        });
+
+        // Close Sector Modal events
+        const closeSectorBtn = document.getElementById('close-sector-modal-btn');
+        if (closeSectorBtn) {
+            closeSectorBtn.addEventListener('click', () => {
+                document.getElementById('sector-modal').classList.remove('active');
+            });
+        }
+        document.getElementById('sector-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'sector-modal') {
+                document.getElementById('sector-modal').classList.remove('active');
+            }
         });
 
         // Chart Type Switcher events
@@ -1044,6 +1075,9 @@ document.addEventListener('DOMContentLoaded', () => {
         list.forEach(item => {
             const card = document.createElement('div');
             card.className = 'sector-card';
+            card.addEventListener('click', () => {
+                openSectorModal(item['Name']);
+            });
 
             const { formatted: changeText, isBullish } = parseChange(item['Change']);
             const barColor = isBullish ? 'bullish' : 'bearish';
@@ -1218,6 +1252,44 @@ document.addEventListener('DOMContentLoaded', () => {
         ['mcap', 'pe', 'sfloat', 'rsi', 'price', 'change'].forEach(id => {
             document.getElementById(`m-${id}`).innerText = '-';
         });
+
+        // Preload confluences if not loaded yet
+        if (currentConfluencesList.length === 0) {
+            try {
+                const res = await fetch(`${API_BASE}/api/confluences`);
+                if (res.ok) {
+                    const payload = await res.json();
+                    if (payload.data) {
+                        currentConfluencesList = payload.data;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to preload confluences in modal:", e);
+            }
+        }
+
+        // Check for score breakdown
+        const confluenceItem = currentConfluencesList.find(x => x.Ticker === ticker);
+        const breakdownPanel = document.getElementById('score-breakdown-panel');
+        if (breakdownPanel) {
+            if (confluenceItem && confluenceItem.ScoreBreakdown) {
+                breakdownPanel.style.display = 'block';
+                const techScore = confluenceItem.ScoreBreakdown.tech || 0;
+                const fundScore = confluenceItem.ScoreBreakdown.fund || 0;
+                const sentScore = confluenceItem.ScoreBreakdown.sent || 0;
+
+                document.getElementById('breakdown-tech-val').innerText = `${techScore} / 40`;
+                document.getElementById('breakdown-tech-bar').style.width = `${(techScore / 40) * 100}%`;
+
+                document.getElementById('breakdown-fund-val').innerText = `${fundScore} / 35`;
+                document.getElementById('breakdown-fund-bar').style.width = `${(fundScore / 35) * 100}%`;
+
+                document.getElementById('breakdown-sent-val').innerText = `${sentScore} / 25`;
+                document.getElementById('breakdown-sent-bar').style.width = `${(sentScore / 25) * 100}%`;
+            } else {
+                breakdownPanel.style.display = 'none';
+            }
+        }
 
         try {
             let stockData;
@@ -1448,6 +1520,114 @@ document.addEventListener('DOMContentLoaded', () => {
             document.head.appendChild(script);
         } else {
             renderWidget();
+        }
+    }
+
+    function getSectorZhName(name) {
+        const sectorMapping = {
+            'Technology': '科技',
+            'Financial': '金融',
+            'Healthcare': '医疗保健',
+            'Consumer Cyclical': '周期性消费',
+            'Industrials': '工业',
+            'Communication Services': '通讯服务',
+            'Consumer Defensive': '防御性消费',
+            'Energy': '能源',
+            'Real Estate': '房地产',
+            'Basic Materials': '基础材料',
+            'Utilities': '公用事业'
+        };
+        return sectorMapping[name] || name;
+    }
+
+    async function openSectorModal(sectorName) {
+        if (!sectorName) return;
+
+        const modal = document.getElementById('sector-modal');
+        if (!modal) return;
+        modal.classList.add('active');
+
+        // Set loading states
+        document.getElementById('sector-modal-title').innerText = activeLang === 'zh' ? getSectorZhName(sectorName) : sectorName;
+        document.getElementById('sector-modal-change').innerText = '...';
+        document.getElementById('sector-modal-change').className = 'change-badge';
+        document.getElementById('sector-modal-industries-list').innerHTML = `
+            <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">${translations[activeLang].loading_sectors}</td></tr>
+        `;
+        document.getElementById('sector-modal-stocks-grid').innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 20px;">${translations[activeLang].loading_confluences}</div>
+        `;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/sectors/${encodeURIComponent(sectorName)}`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const payload = await res.json();
+            
+            // Populate Sector Name & Change Badge
+            const metrics = payload.metrics || {};
+            const { formatted: changeText, isBullish } = parseChange(metrics['Change']);
+            const changeBadge = document.getElementById('sector-modal-change');
+            changeBadge.innerText = changeText;
+            changeBadge.className = 'change-badge ' + (isBullish ? 'positive' : 'negative');
+            
+            // Populate industries performance
+            const industriesList = document.getElementById('sector-modal-industries-list');
+            industriesList.innerHTML = '';
+            const industries = payload.industries || [];
+            
+            if (industries.length === 0) {
+                industriesList.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No industries found.</td></tr>`;
+            } else {
+                industries.forEach(ind => {
+                    const tr = document.createElement('tr');
+                    const indChange = parseChange(ind['Change']);
+                    tr.innerHTML = `
+                        <td>${escapeHtml(ind['Name'])}</td>
+                        <td style="text-align: right; color: var(--${indChange.isBullish ? 'positive' : 'negative'}); font-weight: 600;">${indChange.formatted}</td>
+                        <td style="text-align: right;">${ind['Stocks'] || 0}</td>
+                    `;
+                    industriesList.appendChild(tr);
+                });
+            }
+            
+            // Populate stocks list
+            const stocksGrid = document.getElementById('sector-modal-stocks-grid');
+            stocksGrid.innerHTML = '';
+            const confluences = payload.confluences || [];
+            
+            if (confluences.length === 0) {
+                stocksGrid.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">${translations[activeLang].no_confluences}</div>`;
+            } else {
+                confluences.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = 'sector-stock-card';
+                    const changeVal = parseChange(s['Change']);
+                    
+                    div.innerHTML = `
+                        <div class="sector-stock-info">
+                            <span class="sector-stock-ticker">${escapeHtml(s['Ticker'])}</span>
+                            <span class="sector-stock-company">${escapeHtml(s['Company'])}</span>
+                        </div>
+                        <div class="sector-stock-metrics">
+                            <span style="color: var(--${changeVal.isBullish ? 'positive' : 'negative'}); font-weight: 600; font-size: 0.8rem;">${changeVal.formatted}</span>
+                            <div class="sector-stock-score-wrap">
+                                <span class="sector-stock-score">${s['Score']}</span>
+                                <span class="sector-stock-score-label">${activeLang === 'zh' ? '共振分' : 'Score'}</span>
+                            </div>
+                        </div>
+                    `;
+                    div.addEventListener('click', () => {
+                        modal.classList.remove('active');
+                        openModal(s['Ticker']);
+                    });
+                    stocksGrid.appendChild(div);
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load sector details:", e);
+            document.getElementById('sector-modal-industries-list').innerHTML = `
+                <tr><td colspan="3" style="text-align: center; color: var(--negative);">${translations[activeLang].err_sectors}</td></tr>
+            `;
         }
     }
 });

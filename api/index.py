@@ -335,6 +335,77 @@ def get_sectors():
         print(f"[ERROR] sectors: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch sector data.")
 
+@app.get("/api/sectors/{sector_name}")
+def get_sector_details(sector_name: str):
+    from urllib.parse import unquote
+    sector_name = unquote(sector_name).strip()
+    
+    # 1. Load sectors performance to get specific sector metrics
+    sectors_perf = cache.get("sectors_performance") or []
+    sector_metric = next((s for s in sectors_perf if s.get("Name", "").lower() == sector_name.lower()), {})
+    real_sector_name = sector_metric.get("Name") or sector_name
+    
+    # 2. Get industries performance
+    industries_perf = cache.get("industries_performance") or []
+    
+    # 3. Get confluences
+    confluences_response = get_confluences()
+    confluences = confluences_response.get("data") or []
+    
+    # 4. Scan cached opportunities to get mapping of Sector -> Industries dynamically
+    industries_in_sector = set()
+    supported_signals = [
+        "oversold", "overbought", "double_bottom", "wedge_up", "wedge_down",
+        "triangle_ascending", "top_gainers", "top_losers", "new_high", "most_active",
+        "most_volatile", "unusual_volume", "upgrades", "downgrades", "earnings_before",
+        "earnings_after", "recent_insider_buying", "high_short_interest", "pullback",
+        "breakout_candidate", "quality_compounder"
+    ]
+    
+    for s in confluences:
+        if s.get("Sector", "").lower() == real_sector_name.lower():
+            ind = s.get("Industry")
+            if ind:
+                industries_in_sector.add(ind)
+                
+    for sig in supported_signals:
+        sig_data = cache.get(f"opps_{sig}") or []
+        for s in sig_data:
+            if s.get("Sector", "").lower() == real_sector_name.lower():
+                ind = s.get("Industry")
+                if ind:
+                    industries_in_sector.add(ind)
+                    
+    # 5. Filter industries performance for this sector
+    matched_industries = []
+    for ind in industries_in_sector:
+        perf = next((i for i in industries_perf if i.get("Name", "").lower() == ind.lower()), None)
+        if perf:
+            matched_industries.append(perf)
+        else:
+            matched_industries.append({"Name": ind, "Change": "0.0%", "Stocks": 0})
+            
+    def parse_pct(s):
+        try:
+            return float(str(s).replace("%", "").strip())
+        except:
+            return -999.0
+    matched_industries = sorted(matched_industries, key=lambda x: parse_pct(x.get("Change", 0)), reverse=True)
+    
+    # 6. Filter top confluence stocks in this sector
+    sector_confluences = [
+        s for s in confluences 
+        if s.get("Sector", "").lower() == real_sector_name.lower()
+    ]
+    
+    return {
+        "sector": real_sector_name,
+        "metrics": sector_metric,
+        "industries": matched_industries,
+        "confluences": sector_confluences,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+
 @app.get("/api/reddit")
 def get_reddit_sentiment():
     cache_key = "reddit_sentiment"
@@ -630,66 +701,73 @@ def get_confluences():
 
     res_list = []
     for ticker, e in tickers_map.items():
-        score = 0
         reasons = []
 
-        # Group 1: Reversal signals (mutually exclusive with breakout group)
+        # 1. Technical Structure (Max 40)
+        tech_dim = 0
         if e["Factors"]["reversal"] or e["Factors"]["pullback"]:
             if e["Factors"]["reversal"]:
-                score += 30
+                tech_dim += 30
                 reasons.append("Technical Reversal (超卖/底部构筑)")
             if e["Factors"]["pullback"]:
-                score += 25
+                tech_dim += 25
                 reasons.append("Trend Pullback (均线趋势回调)")
-        # Group 2: Breakout signals (only if no reversal signals)
         elif e["Factors"]["breakout"] or e["Factors"]["breakout_candidate"]:
             if e["Factors"]["breakout"]:
-                score += 20
+                tech_dim += 20
                 reasons.append("Technical Breakout (新高/突破构筑)")
             if e["Factors"]["breakout_candidate"]:
-                score += 25
+                tech_dim += 25
                 reasons.append("Breakout Candidate (放量临近历史高点)")
         
         if e["Factors"]["volume_spike"]:
-            score += 15
+            tech_dim += 10
             reasons.append("Unusual Volume (主力异动放量)")
-
-        if e["Factors"]["insider_buying"]:
-            score += 30
-            reasons.append("Insider Buying (高管净买入)")
-
-        if e["Factors"]["reddit_popular"]:
-            score += 20
-            reasons.append("Reddit Popular (散户讨论活跃)")
 
         if e["Sector"] in top_3_sectors:
             e["Factors"]["strong_sector"] = True
-            score += 20
+            tech_dim += 5
             reasons.append("Strong Sector (处于今日强势板块)")
+            
+        tech_dim = min(tech_dim, 40)
 
+        # 2. Fundamentals & Corporate Insiders (Max 35)
+        fund_dim = 0
+        if e["Factors"]["insider_buying"]:
+            fund_dim += 15
+            reasons.append("Insider Buying (高管净买入)")
+        if e["Factors"]["quality_compounder"]:
+            fund_dim += 15
+            reasons.append("Quality Compounder (高ROE低负债绩优)")
+        if e["Factors"]["analyst_upgrade"]:
+            fund_dim += 10
+            reasons.append("Analyst Upgrade (分析师评级上调)")
+        if e["Factors"]["earnings_catalyst"]:
+            fund_dim += 5
+            reasons.append("Earnings Catalyst (财报催化剂)")
+            
+        fund_dim = min(fund_dim, 35)
+
+        # 3. Market Sentiment & Flow (Max 25)
+        sent_dim = 0
+        if e["Factors"]["momentum_leader"]:
+            sent_dim += 15
+            reasons.append("Market Leader (市场主力关注)")
+        if e["Factors"]["reddit_popular"]:
+            sent_dim += 10
+            reasons.append("Reddit Popular (散户讨论活跃)")
         if e["Factors"]["short_squeeze"]:
             if e["Factors"]["reddit_popular"] or e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"]:
-                score += 15
+                sent_dim += 10
                 reasons.append("Squeeze Play (高卖空比且关注度高)")
             else:
-                score += 10
+                sent_dim += 5
                 reasons.append("High Short Float (高卖空比例)")
+                
+        sent_dim = min(sent_dim, 25)
 
-        if e["Factors"]["quality_compounder"]:
-            score += 20
-            reasons.append("Quality Compounder (高ROE低负债绩优)")
-
-        if e["Factors"]["analyst_upgrade"]:
-            score += 20
-            reasons.append("Analyst Upgrade (分析师评级上调)")
-
-        if e["Factors"]["earnings_catalyst"]:
-            score += 15
-            reasons.append("Earnings Catalyst (财报催化剂)")
-
-        if e["Factors"]["momentum_leader"]:
-            score += 10
-            reasons.append("Market Leader (市场主力关注)")
+        # Combined Score
+        score = tech_dim + fund_dim + sent_dim
 
         # 计算纯技术面评分 TechScore
         tech_score = 0
@@ -733,10 +811,15 @@ def get_confluences():
             tech_score += 20
             
         e["TechScore"] = min(tech_score, 100)
-        e["Score"] = min(score, 100)
+        e["Score"] = score
+        e["ScoreBreakdown"] = {
+            "tech": tech_dim,
+            "fund": fund_dim,
+            "sent": sent_dim
+        }
         e["Reasons"] = reasons
 
-        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"] or e["Factors"]["pullback"] or e["Factors"]["breakout_candidate"] or e["Factors"]["quality_compounder"] or e["Factors"]["analyst_upgrade"] or e["Factors"]["earnings_catalyst"] or e["Factors"]["momentum_leader"]):
+        if e["Score"] >= 35:
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)

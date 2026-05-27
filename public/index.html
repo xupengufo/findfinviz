@@ -271,6 +271,39 @@
                         </div>
                     </div>
 
+                    <div class="modal-detail-panel" id="score-breakdown-panel" style="display: none;">
+                        <h3 data-i18n="modal_score_breakdown">Resonance Score Breakdown</h3>
+                        <div class="score-breakdown-container">
+                            <div class="breakdown-item">
+                                <div class="breakdown-label-row">
+                                    <span data-i18n="breakdown_tech">Technical Structure</span>
+                                    <span id="breakdown-tech-val" class="font-data">0 / 40</span>
+                                </div>
+                                <div class="breakdown-bar-bg">
+                                    <div id="breakdown-tech-bar" class="breakdown-bar-fill tech-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <div class="breakdown-item">
+                                <div class="breakdown-label-row">
+                                    <span data-i18n="breakdown_fund">Fundamentals & Insiders</span>
+                                    <span id="breakdown-fund-val" class="font-data">0 / 35</span>
+                                </div>
+                                <div class="breakdown-bar-bg">
+                                    <div id="breakdown-fund-bar" class="breakdown-bar-fill fund-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <div class="breakdown-item">
+                                <div class="breakdown-label-row">
+                                    <span data-i18n="breakdown_sent">Market Sentiment & Flow</span>
+                                    <span id="breakdown-sent-val" class="font-data">0 / 25</span>
+                                </div>
+                                <div class="breakdown-bar-bg">
+                                    <div id="breakdown-sent-bar" class="breakdown-bar-fill sent-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="modal-detail-panel">
                         <h3 data-i18n="modal_profile">Company Profile</h3>
                         <p id="modal-desc">Loading description...</p>
@@ -315,6 +348,50 @@
                         <div id="modal-news-list" class="news-list">
                             <!-- News links -->
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Detail Modal -->
+    <div id="sector-modal" class="modal-overlay">
+        <div class="modal-card surface-card sector-modal-card">
+            <header class="modal-header">
+                <div class="modal-title-section">
+                    <h2 id="sector-modal-title">Technology</h2>
+                    <div class="company-subinfo">
+                        <span id="sector-modal-change" class="change-badge">+1.25%</span>
+                    </div>
+                </div>
+                <button class="close-modal-btn" aria-label="Close modal" id="close-sector-modal-btn"><i data-lucide="x"></i></button>
+            </header>
+
+            <div class="modal-body sector-modal-body">
+                <!-- Left Column: Industry Performance Table -->
+                <div class="sector-left-col">
+                    <h3 data-i18n="sector_industries_title">Industries in Sector</h3>
+                    <div class="table-container">
+                        <table class="industries-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="industry_name">Industry</th>
+                                    <th data-i18n="industry_change" style="text-align: right;">Change</th>
+                                    <th data-i18n="industry_stocks" style="text-align: right;">Stocks</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sector-modal-industries-list">
+                                <!-- Dynamically loaded industries -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Right Column: Top Opportunities (Confluences) -->
+                <div class="sector-right-col">
+                    <h3 data-i18n="sector_top_opportunities">Top Confluence Opportunities</h3>
+                    <div id="sector-modal-stocks-grid" class="sector-stocks-grid">
+                        <!-- Dynamically loaded stock opportunity cards -->
                     </div>
                 </div>
             </div>

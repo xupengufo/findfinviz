@@ -222,12 +222,12 @@ def sync_insiders():
 
 def sync_sectors():
     print("Scraping sector performance matrix...")
-    def do_scrape():
+    def do_scrape_sec():
         fgoverview = GroupOverview()
         return fgoverview.screener_view(group="Sector")
 
     try:
-        df = retry_with_backoff(do_scrape)
+        df = retry_with_backoff(do_scrape_sec)
         data = []
         if df is not None:
             df = df.fillna("")
@@ -235,6 +235,21 @@ def sync_sectors():
         push_to_kv("sectors_performance", data)
     except Exception as e:
         print("Failed to scrape sector matrix after retries:", e)
+
+    print("Scraping industry performance matrix...")
+    def do_scrape_ind():
+        fgoverview = GroupOverview()
+        return fgoverview.screener_view(group="Industry")
+
+    try:
+        df = retry_with_backoff(do_scrape_ind)
+        data = []
+        if df is not None:
+            df = df.fillna("")
+            data = df.to_dict(orient="records")
+        push_to_kv("industries_performance", data)
+    except Exception as e:
+        print("Failed to scrape industry matrix after retries:", e)
 
 def sync_reddit():
     print("Scraping Reddit and WSB stock sentiment...")
