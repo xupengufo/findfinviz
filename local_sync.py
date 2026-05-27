@@ -132,7 +132,10 @@ def sync_opportunities():
         "top_gainers": "Top Gainers",
         "new_high": "New High",
         "unusual_volume": "Unusual Volume",
-        "high_short_interest": "high_short_interest"
+        "high_short_interest": "high_short_interest",
+        "pullback": "pullback",
+        "breakout_candidate": "breakout_candidate",
+        "quality_compounder": "quality_compounder"
     }
     
     for key, signal_name in signals.items():
@@ -142,6 +145,23 @@ def sync_opportunities():
             fcustom = Custom()
             if sig_key == "high_short_interest":
                 fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
+            elif sig_key == "pullback":
+                fcustom.set_filter(filters_dict={
+                    "50-Day Simple Moving Average": "Price above SMA50",
+                    "200-Day Simple Moving Average": "Price above SMA200",
+                    "RSI (14)": "Not Overbought (<50)"
+                })
+            elif sig_key == "breakout_candidate":
+                fcustom.set_filter(filters_dict={
+                    "52-Week High/Low": "0-5% below High",
+                    "Relative Volume": "Over 1.5"
+                })
+            elif sig_key == "quality_compounder":
+                fcustom.set_filter(filters_dict={
+                    "Return on Equity": "Over +15%",
+                    "Debt/Equity": "Under 1",
+                    "P/E": "Profitable (>0)"
+                })
             else:
                 fcustom.set_filter(signal=sig_val)
             return fcustom.screener_view(
@@ -149,7 +169,7 @@ def sync_opportunities():
                 order="Market Cap.", 
                 ascend=False, 
                 verbose=0, 
-                columns=[0, 1, 2, 3, 4, 6, 7, 30, 64, 65, 66, 67]
+                columns=[0, 1, 2, 3, 4, 6, 7, 30, 33, 38, 64, 65, 66, 67]
             )
 
         try:

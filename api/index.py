@@ -171,7 +171,10 @@ def get_opportunities(signal: str = "Oversold"):
         "top_gainers": "Top Gainers",
         "new_high": "New High",
         "unusual_volume": "Unusual Volume",
-        "high_short_interest": "high_short_interest"
+        "high_short_interest": "high_short_interest",
+        "pullback": "pullback",
+        "breakout_candidate": "breakout_candidate",
+        "quality_compounder": "quality_compounder"
     }
 
     normalized_signal = signal.lower().replace(" ", "_")
@@ -185,6 +188,23 @@ def get_opportunities(signal: str = "Oversold"):
         fcustom = Custom()
         if normalized_signal == "high_short_interest":
             fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
+        elif normalized_signal == "pullback":
+            fcustom.set_filter(filters_dict={
+                "50-Day Simple Moving Average": "Price above SMA50",
+                "200-Day Simple Moving Average": "Price above SMA200",
+                "RSI (14)": "Not Overbought (<50)"
+            })
+        elif normalized_signal == "breakout_candidate":
+            fcustom.set_filter(filters_dict={
+                "52-Week High/Low": "0-5% below High",
+                "Relative Volume": "Over 1.5"
+            })
+        elif normalized_signal == "quality_compounder":
+            fcustom.set_filter(filters_dict={
+                "Return on Equity": "Over +15%",
+                "Debt/Equity": "Under 1",
+                "P/E": "Profitable (>0)"
+            })
         else:
             fcustom.set_filter(signal=supported_signals[normalized_signal])
             
@@ -193,7 +213,7 @@ def get_opportunities(signal: str = "Oversold"):
             order="Market Cap.", 
             ascend=False, 
             verbose=0, 
-            columns=[0, 1, 2, 3, 4, 6, 7, 30, 64, 65, 66, 67]
+            columns=[0, 1, 2, 3, 4, 6, 7, 30, 33, 38, 64, 65, 66, 67]
         )
         
         data = []
@@ -341,6 +361,9 @@ def get_confluences():
     triangle_ascending = cache.get("opps_triangle_ascending") or []
     unusual_volume = cache.get("opps_unusual_volume") or []
     high_short_interest = cache.get("opps_high_short_interest") or []
+    pullback = cache.get("opps_pullback") or []
+    breakout_candidate = cache.get("opps_breakout_candidate") or []
+    quality_compounder = cache.get("opps_quality_compounder") or []
     
     insiders = cache.get("insiders_top_owner_trade") or []
     insiders_latest = cache.get("insiders_latest") or []
@@ -351,7 +374,7 @@ def get_confluences():
 
     tickers_map = {}
 
-    def get_or_create_ticker(ticker, company, sector, industry, price, change, mcap, pe, float_short, rel_vol):
+    def get_or_create_ticker(ticker, company, sector, industry, price, change, mcap, pe, float_short, rel_vol, roe=None, debt_equity=None):
         t = ticker.upper()
         if t not in tickers_map:
             tickers_map[t] = {
@@ -365,6 +388,8 @@ def get_confluences():
                 "P/E": pe or "",
                 "Short Float": float_short or "",
                 "Rel Volume": rel_vol or "",
+                "ROE": roe or "",
+                "Debt/Eq": debt_equity or "",
                 "Score": 0,
                 "Reasons": [],
                 "Factors": {
@@ -374,7 +399,10 @@ def get_confluences():
                     "short_squeeze": False,
                     "insider_buying": False,
                     "reddit_popular": False,
-                    "strong_sector": False
+                    "strong_sector": False,
+                    "pullback": False,
+                    "breakout_candidate": False,
+                    "quality_compounder": False
                 }
             }
         entry = tickers_map[t]
@@ -387,55 +415,75 @@ def get_confluences():
         if not entry["P/E"] and pe: entry["P/E"] = pe
         if not entry["Short Float"] and float_short: entry["Short Float"] = float_short
         if not entry["Rel Volume"] and rel_vol: entry["Rel Volume"] = rel_vol
+        if not entry["ROE"] and roe: entry["ROE"] = roe
+        if not entry["Debt/Eq"] and debt_equity: entry["Debt/Eq"] = debt_equity
         return entry
 
     for item in oversold:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["reversal"] = True
 
     for item in double_bottom:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["reversal"] = True
 
     for item in new_high:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["breakout"] = True
 
     for item in triangle_ascending:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["breakout"] = True
 
     for item in unusual_volume:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["volume_spike"] = True
 
     for item in high_short_interest:
         ticker = item.get("Ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["short_squeeze"] = True
+
+    for item in pullback:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["pullback"] = True
+
+    for item in breakout_candidate:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["breakout_candidate"] = True
+
+    for item in quality_compounder:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["quality_compounder"] = True
 
     for item in insiders + insiders_latest + insiders_top_week:
         ticker = item.get("Ticker")
         txn = item.get("Transaction")
         if ticker and txn and "buy" in txn.lower():
-            e = get_or_create_ticker(ticker, "", "", "", "", "", "", "", "", "")
+            e = get_or_create_ticker(ticker, "", "", "", "", "", "", "", "", "", None, None)
             e["Factors"]["insider_buying"] = True
 
     for item in reddit[:50]:
         ticker = item.get("ticker")
         if ticker:
-            e = get_or_create_ticker(ticker, item.get("name"), "", "", "", "", "", "", "", "")
+            e = get_or_create_ticker(ticker, item.get("name"), "", "", "", "", "", "", "", "", None, None)
             e["Factors"]["reddit_popular"] = True
 
     top_3_sectors = []
@@ -487,10 +535,22 @@ def get_confluences():
                 score += 10
                 reasons.append("High Short Float (高卖空比例)")
 
+        if e["Factors"]["pullback"]:
+            score += 25
+            reasons.append("Trend Pullback (均线趋势回调)")
+
+        if e["Factors"]["breakout_candidate"]:
+            score += 25
+            reasons.append("Breakout Candidate (放量临近历史高点)")
+
+        if e["Factors"]["quality_compounder"]:
+            score += 20
+            reasons.append("Quality Compounder (高ROE低负债绩优)")
+
         e["Score"] = min(score, 100)
         e["Reasons"] = reasons
 
-        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"]):
+        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"] or e["Factors"]["pullback"] or e["Factors"]["breakout_candidate"] or e["Factors"]["quality_compounder"]):
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)

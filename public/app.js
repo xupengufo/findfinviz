@@ -64,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
             sig_triangle_ascending: "Triangle Ascending",
             sig_top_gainers: "Top Gainers",
             sig_new_high: "New High",
+            sig_pullback: "Trend Pullback",
+            sig_breakout_candidate: "Breakout Candidate",
+            sig_quality_compounder: "Quality Compounder",
             opt_top_owner: "Top Owner Trades",
             opt_latest: "Latest Transactions",
             opt_top_week: "Top Week",
@@ -152,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
             sig_triangle_ascending: "上升三角形",
             sig_top_gainers: "最大涨幅",
             sig_new_high: "创历史新高",
+            sig_pullback: "均线回调 (Low Risk)",
+            sig_breakout_candidate: "放量突破候选",
+            sig_quality_compounder: "高质量复利股",
             opt_top_owner: "大股东交易排行",
             opt_latest: "最新交易快讯",
             opt_top_week: "本周大额排行",
@@ -503,6 +509,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     const icon = isHighShort ? '<i data-lucide="flame" style="width:10px;height:10px;"></i> ' : '';
                     badges.push(`<span class="${cssClass}">${icon}${label}</span>`);
                 }
+            }
+        }
+
+        // ROE Badge
+        const roeStr = String(item['Return on Equity'] || '');
+        if (roeStr && roeStr !== '-') {
+            const roeVal = parseFloat(roeStr.replace('%', ''));
+            if (!isNaN(roeVal)) {
+                const isHighRoe = roeVal >= 15.0;
+                const label = activeLang === 'zh' ? `ROE ${roeStr}` : `ROE ${roeStr}`;
+                const cssClass = isHighRoe ? 'card-badge card-badge-roe' : 'card-badge';
+                const icon = isHighRoe ? '<i data-lucide="trending-up" style="width:10px;height:10px;"></i> ' : '';
+                badges.push(`<span class="${cssClass}">${icon}${label}</span>`);
+            }
+        }
+
+        // Debt/Equity Badge
+        const debtStr = String(item['Total Debt/Equity'] || '');
+        if (debtStr && debtStr !== '-') {
+            const debtVal = parseFloat(debtStr);
+            if (!isNaN(debtVal)) {
+                const isLowDebt = debtVal <= 1.0;
+                const label = activeLang === 'zh' ? `负债 ${debtStr}` : `Debt/Eq ${debtStr}`;
+                const cssClass = isLowDebt ? 'card-badge card-badge-debt' : 'card-badge';
+                const icon = isLowDebt ? '<i data-lucide="shield" style="width:10px;height:10px;"></i> ' : '';
+                badges.push(`<span class="${cssClass}">${icon}${label}</span>`);
+            }
+        }
+
+        // Strategy Badges (for Confluence tab and signal overlays)
+        if (item['Factors']) {
+            if (item['Factors']['pullback']) {
+                const label = activeLang === 'zh' ? '趋势回调' : 'Pullback Play';
+                badges.push(`<span class="card-badge card-badge-strategy-pullback"><i data-lucide="arrow-down-to-line" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['breakout_candidate']) {
+                const label = activeLang === 'zh' ? '放量突破候选' : 'Breakout Candidate';
+                badges.push(`<span class="card-badge card-badge-strategy-breakout"><i data-lucide="arrow-up-right" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['quality_compounder']) {
+                const label = activeLang === 'zh' ? '优质复利' : 'Quality Compounder';
+                badges.push(`<span class="card-badge card-badge-strategy-quality"><i data-lucide="award" style="width:10px;height:10px;"></i> ${label}</span>`);
             }
         }
 
