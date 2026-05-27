@@ -707,6 +707,38 @@ document.addEventListener('DOMContentLoaded', () => {
             const { formatted: changeText, isBullish } = parseChange(item['Change']);
             const changeClass = isBullish ? 'bullish' : 'bearish';
 
+            // Dominant technical pattern
+            let dominantPattern = '';
+            let patternClass = '';
+            if (item['Factors']) {
+                if (item['Factors']['breakout']) {
+                    dominantPattern = activeLang === 'zh' ? '⚡ 强力突破' : '⚡ Breakout';
+                    patternClass = 'pattern-breakout';
+                } else if (item['Factors']['pullback']) {
+                    dominantPattern = activeLang === 'zh' ? '📉 缩量回踩' : '📉 Pullback';
+                    patternClass = 'pattern-pullback';
+                } else if (item['Factors']['reversal']) {
+                    dominantPattern = activeLang === 'zh' ? '🛡️ 超卖筑底' : '🛡️ Reversal';
+                    patternClass = 'pattern-reversal';
+                } else if (item['Factors']['breakout_candidate']) {
+                    dominantPattern = activeLang === 'zh' ? '⏳ 蓄势突破' : '⏳ Consolidating';
+                    patternClass = 'pattern-consolidating';
+                }
+            }
+
+            // Volume intensity
+            let rvolVal = parseFloat(item['Rel Volume']);
+            let volumeSparkHtml = '';
+            if (!isNaN(rvolVal)) {
+                if (rvolVal >= 2.5) {
+                    volumeSparkHtml = `<span class="vol-spark vol-spark-heavy" title="RVOL: ${rvolVal}">🔥 ${activeLang === 'zh' ? '爆量' : 'Heavy'}</span>`;
+                } else if (rvolVal >= 1.5) {
+                    volumeSparkHtml = `<span class="vol-spark vol-spark-active" title="RVOL: ${rvolVal}">⚡ ${activeLang === 'zh' ? '放量' : 'Active'}</span>`;
+                } else if (rvolVal < 1.0) {
+                    volumeSparkHtml = `<span class="vol-spark vol-spark-quiet" title="RVOL: ${rvolVal}">💤 ${activeLang === 'zh' ? '缩量' : 'Quiet'}</span>`;
+                }
+            }
+
             let scoreClass = '';
             if (item['Score'] >= 80) {
                 scoreClass = 'score-veryhigh';
@@ -714,11 +746,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 scoreClass = 'score-high';
             }
 
-            let techScoreClass = '';
+            let techScoreClass = 'tech-score-normal';
             if (item['TechScore'] >= 80) {
                 techScoreClass = 'tech-score-veryhigh';
             } else if (item['TechScore'] >= 60) {
                 techScoreClass = 'tech-score-high';
+            } else if (item['TechScore'] < 50) {
+                techScoreClass = 'tech-score-low';
             }
 
             let reasonsHtml = '';
@@ -741,6 +775,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div>
                         <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
                         <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
+                        <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                            ${dominantPattern ? `<span class="pattern-badge ${patternClass}">${dominantPattern}</span>` : ''}
+                            ${volumeSparkHtml}
+                        </div>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <div class="tech-score-wrap">
