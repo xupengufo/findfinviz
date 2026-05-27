@@ -56,7 +56,9 @@ class FallbackCache:
                 self.is_redis = False
                 
         if not self.is_redis:
-            self.db_path = os.path.join(project_root, "cache.db")
+            self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
+            if not os.path.exists(self.db_path):
+                self.db_path = os.path.join(project_root, "cache.db")
             try:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()

@@ -39,6 +39,12 @@ client = None
 is_redis = bool(redis_url)
 project_root = os.path.dirname(os.path.abspath(__file__))
 
+def get_db_path():
+    api_db = os.path.join(project_root, "api", "cache.db")
+    if os.path.exists(os.path.dirname(api_db)):
+        return api_db
+    return os.path.join(project_root, "cache.db")
+
 if is_redis:
     if redis_url.startswith("http"):
         is_redis_rest = True
@@ -54,7 +60,7 @@ if is_redis:
             is_redis = False
 else:
     print("Vercel Redis credentials missing. Falling back to SQLite cache.db for local caching.")
-    db_path = os.path.join(project_root, "cache.db")
+    db_path = get_db_path()
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
@@ -106,7 +112,7 @@ def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV fo
             import sqlite3
             from datetime import datetime, timezone
             expires_at = int(datetime.now(timezone.utc).timestamp()) + expires_in
-            db_path = os.path.join(project_root, "cache.db")
+            db_path = get_db_path()
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute(
