@@ -19,6 +19,7 @@ if finviz_dir not in sys.path:
 from finvizfinance.quote import finvizfinance
 from finvizfinance.insider import Insider
 from finvizfinance.screener.overview import Overview
+from finvizfinance.screener.custom import Custom
 from finvizfinance.group.overview import Overview as GroupOverview
 
 app = FastAPI(title="US Stock Trading Opportunities API")
@@ -168,7 +169,9 @@ def get_opportunities(signal: str = "Oversold"):
         "wedge_down": "Wedge Down",
         "triangle_ascending": "Triangle Ascending",
         "top_gainers": "Top Gainers",
-        "new_high": "New High"
+        "new_high": "New High",
+        "unusual_volume": "Unusual Volume",
+        "high_short_interest": "high_short_interest"
     }
 
     normalized_signal = signal.lower().replace(" ", "_")
@@ -179,10 +182,19 @@ def get_opportunities(signal: str = "Oversold"):
         )
 
     try:
-        foverview = Overview()
-        # Scan S&P 500 by default to keep load light, or fetch general if no index filter
-        foverview.set_filter(signal=supported_signals[normalized_signal])
-        df = foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
+        fcustom = Custom()
+        if normalized_signal == "high_short_interest":
+            fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
+        else:
+            fcustom.set_filter(signal=supported_signals[normalized_signal])
+            
+        df = fcustom.screener_view(
+            limit=100, 
+            order="Market Cap.", 
+            ascend=False, 
+            verbose=0, 
+            columns=[0, 1, 2, 3, 4, 6, 7, 30, 64, 65, 66, 67]
+        )
         
         data = []
         if df is not None:
@@ -315,6 +327,175 @@ def get_stock(ticker: str):
     except Exception as e:
         print(f"[ERROR] stock {ticker}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch stock details.")
+
+@app.get("/api/confluences")
+def get_confluences():
+    cache_key = "confluences_all"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return {"data": cached_data, "source": "cache"}
+
+    oversold = cache.get("opps_oversold") or []
+    double_bottom = cache.get("opps_double_bottom") or []
+    new_high = cache.get("opps_new_high") or []
+    triangle_ascending = cache.get("opps_triangle_ascending") or []
+    unusual_volume = cache.get("opps_unusual_volume") or []
+    high_short_interest = cache.get("opps_high_short_interest") or []
+    
+    insiders = cache.get("insiders_top_owner_trade") or []
+    insiders_latest = cache.get("insiders_latest") or []
+    insiders_top_week = cache.get("insiders_top_week") or []
+    
+    reddit = cache.get("reddit_sentiment") or []
+    sectors = cache.get("sectors_performance") or []
+
+    tickers_map = {}
+
+    def get_or_create_ticker(ticker, company, sector, industry, price, change, mcap, pe, float_short, rel_vol):
+        t = ticker.upper()
+        if t not in tickers_map:
+            tickers_map[t] = {
+                "Ticker": t,
+                "Company": company or "",
+                "Sector": sector or "",
+                "Industry": industry or "",
+                "Price": price or "",
+                "Change": change or "",
+                "Market Cap": mcap or "",
+                "P/E": pe or "",
+                "Short Float": float_short or "",
+                "Rel Volume": rel_vol or "",
+                "Score": 0,
+                "Reasons": [],
+                "Factors": {
+                    "reversal": False,
+                    "breakout": False,
+                    "volume_spike": False,
+                    "short_squeeze": False,
+                    "insider_buying": False,
+                    "reddit_popular": False,
+                    "strong_sector": False
+                }
+            }
+        entry = tickers_map[t]
+        if not entry["Company"] and company: entry["Company"] = company
+        if not entry["Sector"] and sector: entry["Sector"] = sector
+        if not entry["Industry"] and industry: entry["Industry"] = industry
+        if not entry["Price"] and price: entry["Price"] = price
+        if not entry["Change"] and change: entry["Change"] = change
+        if not entry["Market Cap"] and mcap: entry["Market Cap"] = mcap
+        if not entry["P/E"] and pe: entry["P/E"] = pe
+        if not entry["Short Float"] and float_short: entry["Short Float"] = float_short
+        if not entry["Rel Volume"] and rel_vol: entry["Rel Volume"] = rel_vol
+        return entry
+
+    for item in oversold:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["reversal"] = True
+
+    for item in double_bottom:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["reversal"] = True
+
+    for item in new_high:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["breakout"] = True
+
+    for item in triangle_ascending:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["breakout"] = True
+
+    for item in unusual_volume:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["volume_spike"] = True
+
+    for item in high_short_interest:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap."), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"))
+            e["Factors"]["short_squeeze"] = True
+
+    for item in insiders + insiders_latest + insiders_top_week:
+        ticker = item.get("Ticker")
+        txn = item.get("Transaction")
+        if ticker and txn and "buy" in txn.lower():
+            e = get_or_create_ticker(ticker, "", "", "", "", "", "", "", "", "")
+            e["Factors"]["insider_buying"] = True
+
+    for item in reddit[:50]:
+        ticker = item.get("ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("name"), "", "", "", "", "", "", "", "")
+            e["Factors"]["reddit_popular"] = True
+
+    top_3_sectors = []
+    try:
+        def parse_pct(s):
+            try:
+                return float(str(s).replace("%", "").strip())
+            except:
+                return -999.0
+        sorted_sectors = sorted(sectors, key=lambda x: parse_pct(x.get("Change", 0)), reverse=True)
+        top_3_sectors = [x.get("Name") for x in sorted_sectors[:3] if x.get("Name")]
+    except Exception as ex:
+        print("Error sorting sectors:", ex)
+
+    res_list = []
+    for ticker, e in tickers_map.items():
+        score = 0
+        reasons = []
+
+        if e["Factors"]["reversal"]:
+            score += 30
+            reasons.append("Technical Reversal (超卖/底部构筑)")
+        elif e["Factors"]["breakout"]:
+            score += 20
+            reasons.append("Technical Breakout (新高/突破构筑)")
+        
+        if e["Factors"]["volume_spike"]:
+            score += 15
+            reasons.append("Unusual Volume (主力异动放量)")
+
+        if e["Factors"]["insider_buying"]:
+            score += 30
+            reasons.append("Insider Buying (高管净买入)")
+
+        if e["Factors"]["reddit_popular"]:
+            score += 20
+            reasons.append("Reddit Popular (散户讨论活跃)")
+
+        if e["Sector"] in top_3_sectors:
+            e["Factors"]["strong_sector"] = True
+            score += 20
+            reasons.append("Strong Sector (处于今日强势板块)")
+
+        if e["Factors"]["short_squeeze"]:
+            if e["Factors"]["reddit_popular"] or e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"]:
+                score += 15
+                reasons.append("Squeeze Play (高卖空比且关注度高)")
+            else:
+                score += 10
+                reasons.append("High Short Float (高卖空比例)")
+
+        e["Score"] = min(score, 100)
+        e["Reasons"] = reasons
+
+        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"]):
+            res_list.append(e)
+
+    res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
+    cache.set(cache_key, res_list, expires_in=7200) # 2 hours cache
+    return {"data": res_list, "source": "live"}
 
 # Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles

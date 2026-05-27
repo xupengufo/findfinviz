@@ -1190,3 +1190,158 @@ html[data-theme=dark] .segmented button.active {
         grid-template-columns: 1fr;
     }
 }
+
+/* Confluence & TradingView Switcher Custom Styles */
+.chart-type-selector {
+    display: inline-flex;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    padding: 2px;
+    border-radius: 6px;
+}
+
+.chart-type-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.chart-type-btn:hover {
+    color: var(--text-primary);
+}
+
+.chart-type-btn.active {
+    background: var(--surface-strong);
+    color: var(--brand-gold);
+    box-shadow: var(--shadow-soft);
+}
+
+/* Card Badge Enhancements */
+.card-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    margin-bottom: 12px;
+}
+
+.card-badge {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(120, 120, 120, 0.08);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.card-badge-squeeze {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+    animation: flashBadge 2s infinite alternate;
+}
+
+@keyframes flashBadge {
+    0% { opacity: 0.8; box-shadow: 0 0 2px rgba(239, 68, 68, 0.2); }
+    100% { opacity: 1; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+}
+
+.card-badge-rvol {
+    background: rgba(245, 158, 11, 0.08);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.18);
+}
+
+.card-badge-short {
+    background: rgba(16, 185, 129, 0.08);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.18);
+}
+
+/* Confluence Score styling */
+.confluence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.confluence-score-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.confluence-score-indicator {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: #fff;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.confluence-score-indicator.score-high {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+.confluence-score-indicator.score-veryhigh {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+.confluence-score-label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 3px;
+    font-weight: 600;
+}
+
+.confluence-reasons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    border-top: 1px dashed var(--border);
+    padding-top: 10px;
+}
+
+.confluence-reason-title {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.confluence-reason-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.confluence-reason-tag {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--surface-muted);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+

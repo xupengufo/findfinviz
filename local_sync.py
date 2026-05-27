@@ -36,8 +36,10 @@ import redis
 redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
 is_redis_rest = False
 client = None
+is_redis = bool(redis_url)
+project_root = os.path.dirname(os.path.abspath(__file__))
 
-if redis_url:
+if is_redis:
     if redis_url.startswith("http"):
         is_redis_rest = True
         kv_url = redis_url
@@ -48,45 +50,75 @@ if redis_url:
             client = redis.from_url(redis_url, decode_responses=True)
             print("Connected to Redis server.")
         except Exception as e:
-            print("Failed to connect to Redis server:", e)
-            sys.exit(1)
+            print("Failed to connect to Redis server, falling back to SQLite cache.db:", e)
+            is_redis = False
 else:
-    print("Error: Vercel Redis credentials missing. Please link your Vercel Redis database and run 'vercel env pull .env.local --yes' again.")
-    sys.exit(1)
+    print("Vercel Redis credentials missing. Falling back to SQLite cache.db for local caching.")
+    db_path = os.path.join(project_root, "cache.db")
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Failed to initialize SQLite cache:", e)
 
 # Import local finvizfinance package
-project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 finviz_dir = os.path.join(project_root, "finvizfinance")
 if finviz_dir not in sys.path:
     sys.path.insert(0, finviz_dir)
 from finvizfinance.insider import Insider
-from finvizfinance.screener.overview import Overview
+from finvizfinance.screener.custom import Custom
 from finvizfinance.group.overview import Overview as GroupOverview
 
 def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV for safety
     val_str = json.dumps(data)
-    if is_redis_rest:
-        url = f"{kv_url}/set/{key}?ex={expires_in}"
-        try:
-            res = requests.post(url, headers=headers, data=val_str, timeout=10)
-            if res.status_code == 200 and res.json().get("result") == "OK":
-                print(f"Successfully pushed key '{key}' to Vercel KV (REST).")
-                return True
-            else:
-                print(f"Failed to push key '{key}' (REST):", res.status_code, res.text)
+    if is_redis:
+        if is_redis_rest:
+            url = f"{kv_url}/set/{key}?ex={expires_in}"
+            try:
+                res = requests.post(url, headers=headers, data=val_str, timeout=10)
+                if res.status_code == 200 and res.json().get("result") == "OK":
+                    print(f"Successfully pushed key '{key}' to Vercel KV (REST).")
+                    return True
+                else:
+                    print(f"Failed to push key '{key}' (REST):", res.status_code, res.text)
+                    return False
+            except Exception as e:
+                print(f"Error pushing key '{key}' (REST):", e)
                 return False
-        except Exception as e:
-            print(f"Error pushing key '{key}' (REST):", e)
-            return False
+        else:
+            try:
+                client.setex(key, expires_in, val_str)
+                print(f"Successfully pushed key '{key}' to Vercel Redis.")
+                return True
+            except Exception as e:
+                print(f"Error pushing key '{key}' to Redis:", e)
+                return False
     else:
         try:
-            client.setex(key, expires_in, val_str)
-            print(f"Successfully pushed key '{key}' to Vercel Redis.")
+            import sqlite3
+            from datetime import datetime, timezone
+            expires_at = int(datetime.now(timezone.utc).timestamp()) + expires_in
+            db_path = os.path.join(project_root, "cache.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
+                (key, val_str, expires_at)
+            )
+            conn.commit()
+            conn.close()
+            print(f"Successfully pushed key '{key}' to local SQLite cache.")
             return True
         except Exception as e:
-            print(f"Error pushing key '{key}' to Redis:", e)
+            print(f"Error pushing key '{key}' to SQLite:", e)
             return False
 
 def sync_opportunities():
@@ -98,16 +130,27 @@ def sync_opportunities():
         "wedge_down": "Wedge Down",
         "triangle_ascending": "Triangle Ascending",
         "top_gainers": "Top Gainers",
-        "new_high": "New High"
+        "new_high": "New High",
+        "unusual_volume": "Unusual Volume",
+        "high_short_interest": "high_short_interest"
     }
     
     for key, signal_name in signals.items():
         print(f"Scraping opportunities for signal: {signal_name}...")
 
-        def do_scrape(sig=signal_name):
-            foverview = Overview()
-            foverview.set_filter(signal=sig)
-            return foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
+        def do_scrape(sig_key=key, sig_val=signal_name):
+            fcustom = Custom()
+            if sig_key == "high_short_interest":
+                fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
+            else:
+                fcustom.set_filter(signal=sig_val)
+            return fcustom.screener_view(
+                limit=100, 
+                order="Market Cap.", 
+                ascend=False, 
+                verbose=0, 
+                columns=[0, 1, 2, 3, 4, 6, 7, 30, 64, 65, 66, 67]
+            )
 
         try:
             df = retry_with_backoff(do_scrape)

@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentInsiderList = [];
     let currentSectorsList = [];
     let currentRedditList = [];
+    let currentConfluencesList = [];
     
     // API URL configuration (works for both local development and Vercel)
     const API_BASE = window.location.origin;
@@ -36,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cache to prevent duplicate loads within the session
     const tabLoaded = {
         opportunities: false,
+        confluences: false,
         insider: false,
         sectors: false,
         reddit: false
@@ -121,7 +123,18 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_loading_news: "Loading news...",
             modal_no_news: "No recent news coverage found.",
             modal_err_company: "Error loading company data",
-            modal_err_desc: "Could not load profile description from the API."
+            modal_err_desc: "Could not load profile description from the API.",
+            
+            tab_confluences: "Smart Picks",
+            confluences_title: "Smart Confluence Picks",
+            confluences_subtitle: "Stocks aligning technical reversals/breakouts, institutional volume, insider buying, and retail sentiment.",
+            sig_unusual_volume: "Unusual Volume",
+            sig_high_short_interest: "High Short Float",
+            chart_static: "Static",
+            chart_tv: "TradingView",
+            loading_confluences: "Computing smart setups...",
+            no_confluences: "No confluence setups matching criteria right now.",
+            err_confluences: "Error: Failed to fetch confluences from API."
         },
         zh: {
             tab_opps: "技术选股",
@@ -198,7 +211,18 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_loading_news: "正在加载新闻报道...",
             modal_no_news: "暂无相关新闻报道。",
             modal_err_company: "加载公司数据错误",
-            modal_err_desc: "无法从接口下载公司简介描述。"
+            modal_err_desc: "无法从接口下载公司简介描述。",
+            
+            tab_confluences: "智能共振",
+            confluences_title: "智能多重共振选股",
+            confluences_subtitle: "自动挖掘在技术面、机构资金（放量）、高管增持及散户讨论度多维度产生共振的高胜率股票。",
+            sig_unusual_volume: "异常放量",
+            sig_high_short_interest: "高空头占比",
+            chart_static: "静态走势图",
+            chart_tv: "TradingView 动态图",
+            loading_confluences: "正在挖掘多维共振股票...",
+            no_confluences: "当前未发现符合共振筛选标准的股票。",
+            err_confluences: "错误：无法加载智能共振选股数据。"
         }
     };
 
@@ -231,6 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Re-render from cached data instead of re-fetching
         if (tabLoaded.opportunities) renderOpportunities(currentOppsList);
+        if (tabLoaded.confluences) renderConfluences(currentConfluencesList);
         if (tabLoaded.insider) renderInsider(currentInsiderList);
         if (tabLoaded.sectors) renderSectors(currentSectorsList);
         if (tabLoaded.reddit) renderReddit(currentRedditList);
@@ -347,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Lazy load tab data
                 if (activeTab === 'opportunities') {
                     loadOpportunities();
+                } else if (activeTab === 'confluences') {
+                    loadConfluences();
                 } else if (activeTab === 'insider') {
                     loadInsider();
                 } else if (activeTab === 'sectors') {
@@ -423,9 +450,177 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('ticker-modal').addEventListener('click', (e) => {
             if (e.target.id === 'ticker-modal') closeModal();
         });
+
+        // Chart Type Switcher events
+        const chartStaticBtn = document.getElementById('chart-static-btn');
+        const chartTvBtn = document.getElementById('chart-tv-btn');
+        if (chartStaticBtn && chartTvBtn) {
+            chartStaticBtn.addEventListener('click', () => {
+                chartStaticBtn.classList.add('active');
+                chartTvBtn.classList.remove('active');
+                document.getElementById('modal-chart-img').style.display = 'block';
+                document.getElementById('tradingview-chart-container').style.display = 'none';
+            });
+            chartTvBtn.addEventListener('click', () => {
+                chartTvBtn.classList.add('active');
+                chartStaticBtn.classList.remove('active');
+                document.getElementById('modal-chart-img').style.display = 'none';
+                document.getElementById('tradingview-chart-container').style.display = 'block';
+                const currentTicker = document.getElementById('modal-ticker').innerText;
+                loadTradingViewWidget(currentTicker);
+            });
+        }
     }
 
     // 3. Loading Functions
+    function getBadgesHtml(item) {
+        let badges = [];
+        
+        // Relative Volume RVOL
+        const rvolVal = parseFloat(item['Rel Volume']);
+        if (!isNaN(rvolVal) && rvolVal > 0) {
+            const label = activeLang === 'zh' ? `量能 ${rvolVal.toFixed(1)}x` : `RVOL ${rvolVal.toFixed(1)}x`;
+            const cssClass = rvolVal > 2.0 ? 'card-badge card-badge-rvol' : 'card-badge';
+            const icon = rvolVal > 2.0 ? '<i data-lucide="zap" style="width:10px;height:10px;"></i> ' : '';
+            badges.push(`<span class="${cssClass}">${icon}${label}</span>`);
+        }
+
+        // Float Short
+        const shortFloatStr = String(item['Short Float'] || '');
+        if (shortFloatStr && shortFloatStr !== '-') {
+            const shortVal = parseFloat(shortFloatStr.replace('%', ''));
+            if (!isNaN(shortVal) && shortVal > 0) {
+                const label = activeLang === 'zh' ? `空头 ${shortVal.toFixed(1)}%` : `Short ${shortVal.toFixed(1)}%`;
+                const isHighShort = shortVal >= 15.0;
+                
+                // If high short interest and Reddit mentions, show SQUEEZE alert!
+                const isRedditPopular = item['Factors'] && item['Factors']['reddit_popular'];
+                if (isHighShort && isRedditPopular) {
+                    const alertLabel = activeLang === 'zh' ? `🔥 逼空警告 ${shortVal.toFixed(0)}%` : `🔥 SQUEEZE ALERT ${shortVal.toFixed(0)}%`;
+                    badges.push(`<span class="card-badge card-badge-squeeze">${alertLabel}</span>`);
+                } else {
+                    const cssClass = isHighShort ? 'card-badge card-badge-squeeze' : 'card-badge card-badge-short';
+                    const icon = isHighShort ? '<i data-lucide="flame" style="width:10px;height:10px;"></i> ' : '';
+                    badges.push(`<span class="${cssClass}">${icon}${label}</span>`);
+                }
+            }
+        }
+
+        if (badges.length === 0) return '';
+        return `<div class="card-badges-row">${badges.join('')}</div>`;
+    }
+
+    async function loadConfluences(force = false) {
+        if (tabLoaded.confluences && !force) return;
+        
+        const grid = document.getElementById('confluences-grid');
+        grid.innerHTML = `
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+        `;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/confluences`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const payload = await res.json();
+            currentConfluencesList = payload.data || [];
+            
+            renderConfluences(currentConfluencesList);
+            tabLoaded.confluences = true;
+        } catch (error) {
+            console.error('Failed to load confluences:', error);
+            grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_confluences}</div>`;
+            lucide.createIcons();
+        }
+    }
+
+    function renderConfluences(list) {
+        const grid = document.getElementById('confluences-grid');
+        grid.innerHTML = '';
+        
+        if (!list || list.length === 0) {
+            grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_confluences}</div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'opp-card';
+
+            const { formatted: changeText, isBullish } = parseChange(item['Change']);
+            const changeClass = isBullish ? 'bullish' : 'bearish';
+
+            let scoreClass = '';
+            if (item['Score'] >= 80) {
+                scoreClass = 'score-veryhigh';
+            } else if (item['Score'] >= 60) {
+                scoreClass = 'score-high';
+            }
+
+            let reasonsHtml = '';
+            if (item['Reasons'] && item['Reasons'].length > 0) {
+                const tags = item['Reasons'].map(r => `<span class="confluence-reason-tag">${escapeHtml(r)}</span>`).join('');
+                reasonsHtml = `
+                    <div class="confluence-reasons-container">
+                        <span class="confluence-reason-title">${activeLang === 'zh' ? '共振因子' : 'Confluence Factors'}</span>
+                        <div class="confluence-reason-tags">
+                            ${tags}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const badgesHtml = getBadgesHtml(item);
+
+            card.innerHTML = `
+                <div class="confluence-header">
+                    <div>
+                        <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
+                        <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
+                    </div>
+                    <div class="confluence-score-wrap">
+                        <span class="confluence-score-indicator ${scoreClass}">${item['Score']}</span>
+                        <span class="confluence-score-label">${activeLang === 'zh' ? '共振评分' : 'Match Score'}</span>
+                    </div>
+                </div>
+                
+                ${badgesHtml}
+
+                <div class="card-footer" style="margin-top: 10px;">
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
+                        <span class="item-value font-data">$${escapeHtml(item['Price']) || '-'}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '变动' : 'Change'}</span>
+                        <span class="item-value ${changeClass}">${changeText}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
+                        <span class="item-value">${escapeHtml(item['P/E']) || '-'}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
+                        <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
+                    </div>
+                </div>
+
+                ${reasonsHtml}
+            `;
+
+            card.addEventListener('click', () => {
+                openModal(item['Ticker']);
+            });
+
+            grid.appendChild(card);
+        });
+
+        lucide.createIcons();
+    }
+
     async function loadOpportunities(force = false) {
         if (tabLoaded.opportunities && !force) return;
         
@@ -472,12 +667,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const { formatted: changeText, isBullish } = parseChange(item['Change']);
             const changeClass = isBullish ? 'bullish' : 'bearish';
 
+            const badgesHtml = getBadgesHtml(item);
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
                     <span class="card-change ${changeClass}">${changeText}</span>
                 </div>
                 <div class="card-company">${escapeHtml(item['Company']) || '-'}</div>
+                ${badgesHtml}
                 <div class="card-footer">
                     <div class="card-footer-item">
                         <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
@@ -863,6 +1060,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modal-etfs').innerHTML = '';
         document.getElementById('modal-news-list').innerHTML = `<div style="color: var(--text-dark)">${translations[activeLang].modal_loading_news}</div>`;
         
+        // Reset chart type selector back to static default view
+        const chartStaticBtn = document.getElementById('chart-static-btn');
+        const chartTvBtn = document.getElementById('chart-tv-btn');
+        if (chartStaticBtn && chartTvBtn) {
+            chartStaticBtn.classList.add('active');
+            chartTvBtn.classList.remove('active');
+            document.getElementById('modal-chart-img').style.display = 'block';
+            document.getElementById('tradingview-chart-container').style.display = 'none';
+        }
+
         // Setup initial static FinViz Chart
         const chartImg = document.getElementById('modal-chart-img');
         chartImg.src = `https://finviz.com/chart.ashx?t=${ticker}&ty=c&ta=1&p=d`;
@@ -1068,5 +1275,40 @@ document.addEventListener('DOMContentLoaded', () => {
             return 0;
         });
         return sorted;
+    }
+
+    function loadTradingViewWidget(ticker) {
+        const container = document.getElementById('tradingview-chart-container');
+        if (!container) return;
+        container.innerHTML = `<div id="tradingview_widget_instance" style="width:100%; height:100%;"></div>`;
+
+        const renderWidget = () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            new TradingView.widget({
+                width: "100%",
+                height: "100%",
+                symbol: ticker,
+                interval: "D",
+                timezone: "Etc/UTC",
+                theme: currentTheme,
+                style: "1",
+                locale: activeLang === 'zh' ? "zh_CN" : "en",
+                toolbar_bg: currentTheme === 'dark' ? "#1e1e1e" : "#f1f3f6",
+                enable_publishing: false,
+                hide_side_toolbar: false,
+                allow_symbol_change: false,
+                container_id: "tradingview_widget_instance"
+            });
+        };
+
+        if (!window.TradingView) {
+            const script = document.createElement('script');
+            script.src = 'https://s3.tradingview.com/tv.js';
+            script.type = 'text/javascript';
+            script.onload = renderWidget;
+            document.head.appendChild(script);
+        } else {
+            renderWidget();
+        }
     }
 });

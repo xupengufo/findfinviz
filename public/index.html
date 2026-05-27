@@ -27,6 +27,9 @@
                         <button class="nav-btn active" data-tab="opportunities">
                             <i data-lucide="compass"></i> <span data-i18n="tab_opps">Opportunities</span>
                         </button>
+                        <button class="nav-btn" data-tab="confluences">
+                            <i data-lucide="sparkles"></i> <span data-i18n="tab_confluences">Smart Picks</span>
+                        </button>
                         <button class="nav-btn" data-tab="insider">
                             <i data-lucide="shield-alert"></i> <span data-i18n="tab_insider">Insider Sentiment</span>
                         </button>
@@ -57,6 +60,23 @@
 
         <!-- Main Workspace -->
         <main class="app-main">
+            <!-- Confluences Tab -->
+            <section id="confluences-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="sparkles"></i>
+                        <h2 data-i18n="confluences_title">Smart Confluence Picks</h2>
+                    </div>
+                    <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" data-i18n="confluences_subtitle">
+                        Stocks aligning technical reversals/breakouts, institutional volume, insider buying, and retail sentiment.
+                    </div>
+                </div>
+                
+                <div id="confluences-grid" class="cards-grid">
+                    <!-- Dynamic content -->
+                </div>
+            </section>
+
             <!-- Opportunities Tab -->
             <section id="opportunities-tab" class="tab-content active">
                 <div class="filter-bar">
@@ -71,6 +91,8 @@
                         <button class="signal-btn" data-signal="triangle_ascending" data-i18n="sig_triangle_ascending">Triangle Ascending</button>
                         <button class="signal-btn" data-signal="top_gainers" data-i18n="sig_top_gainers">Top Gainers</button>
                         <button class="signal-btn" data-signal="new_high" data-i18n="sig_new_high">New High</button>
+                        <button class="signal-btn" data-signal="unusual_volume" data-i18n="sig_unusual_volume">Unusual Volume</button>
+                        <button class="signal-btn" data-signal="high_short_interest" data-i18n="sig_high_short_interest">High Short Interest</button>
                     </div>
                     
                     <!-- Opportunity Sort Controls -->
@@ -255,9 +277,16 @@
                 <!-- Right Column: Chart & News -->
                 <div class="modal-right-col">
                     <div class="chart-container">
-                        <h3 data-i18n="modal_chart">Technical Chart (Daily Candles)</h3>
-                        <div class="chart-wrapper">
-                            <img id="modal-chart-img" src="" alt="Stock Technical Chart">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <h3 data-i18n="modal_chart" style="margin: 0;">Technical Chart (Daily Candles)</h3>
+                            <div class="chart-type-selector segmented" style="margin: 0; display: flex; font-size: 0.75rem;">
+                                <button id="chart-static-btn" class="chart-type-btn active" data-type="static" data-i18n="chart_static">Static</button>
+                                <button id="chart-tv-btn" class="chart-type-btn" data-type="tv" data-i18n="chart_tv">TradingView</button>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper" style="position: relative; min-height: 320px; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 6px;">
+                            <img id="modal-chart-img" src="" alt="Stock Technical Chart" style="width: 100%; height: auto; max-height: 320px; object-fit: contain;">
+                            <div id="tradingview-chart-container" style="display: none; width: 100%; height: 320px;"></div>
                         </div>
                         <div class="chart-links">
                             <a id="tv-link" href="#" target="_blank" class="tv-btn"><i data-lucide="external-link"></i> <span data-i18n="modal_tv">View on TradingView</span></a>
