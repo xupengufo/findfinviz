@@ -1,4 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // HTML entity escaping to prevent XSS
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Debounce helper to prevent rapid API calls
+    function debounce(fn, delay = 300) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
     // State management
     let activeTab = 'opportunities';
     let activeSignal = 'oversold';
@@ -6,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSortField = 'marketcap';
     let activeSortDirection = 'desc';
     let currentOppsList = [];
+    let currentInsiderList = [];
+    let currentSectorsList = [];
+    let currentRedditList = [];
     
     // API URL configuration (works for both local development and Vercel)
     const API_BASE = window.location.origin;
@@ -206,11 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
             langBtn.textContent = lang === 'zh' ? '中' : 'EN';
         }
 
-        // Force reload active data elements to update dynamic texts
-        if (tabLoaded.opportunities) loadOpportunities(true);
-        if (tabLoaded.insider) loadInsider(true);
-        if (tabLoaded.sectors) loadSectors(true);
-        if (tabLoaded.reddit) loadReddit(true);
+        // Re-render from cached data instead of re-fetching
+        if (tabLoaded.opportunities) renderOpportunities(currentOppsList);
+        if (tabLoaded.insider) renderInsider(currentInsiderList);
+        if (tabLoaded.sectors) renderSectors(currentSectorsList);
+        if (tabLoaded.reddit) renderReddit(currentRedditList);
     }
 
     // Helper to robustly parse and format FinViz percent/float changes
@@ -335,6 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Debounced loaders for button click handlers
+    const debouncedLoadOpportunities = debounce(() => loadOpportunities(true), 300);
+    const debouncedLoadInsider = debounce(() => loadInsider(true), 300);
+
     // 2. Selectors (Signals & Insider Options)
     function initSelectors() {
         // Signal selectors for Opportunities
@@ -344,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 signalButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 activeSignal = btn.getAttribute('data-signal');
-                loadOpportunities(true); // Force reload
+                debouncedLoadOpportunities(); // Force reload (debounced)
             });
         });
 
@@ -355,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 optionButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 activeInsiderOption = btn.getAttribute('data-option');
-                loadInsider(true); // Force reload
+                debouncedLoadInsider(); // Force reload (debounced)
             });
         });
 
@@ -413,6 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`${API_BASE}/api/opportunities?signal=${activeSignal}`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
             currentOppsList = payload.data || [];
             
@@ -446,14 +474,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.innerHTML = `
                 <div class="card-header">
-                    <span class="card-ticker">${item['Ticker'] || '-'}</span>
+                    <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
                     <span class="card-change ${changeClass}">${changeText}</span>
                 </div>
-                <div class="card-company">${item['Company'] || '-'}</div>
+                <div class="card-company">${escapeHtml(item['Company']) || '-'}</div>
                 <div class="card-footer">
                     <div class="card-footer-item">
                         <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
-                        <span class="item-value" title="${item['Industry'] || '-'}">${item['Industry'] || '-'}</span>
+                        <span class="item-value" title="${escapeHtml(item['Industry']) || '-'}">${escapeHtml(item['Industry']) || '-'}</span>
                     </div>
                     <div class="card-footer-item">
                         <span class="item-label">${activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
@@ -461,11 +489,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="card-footer-item">
                         <span class="item-label">${activeLang === 'zh' ? '最新价' : 'Price'}</span>
-                        <span class="item-value">${item['Price'] || '-'}</span>
+                        <span class="item-value">${escapeHtml(item['Price']) || '-'}</span>
                     </div>
                     <div class="card-footer-item">
                         <span class="item-label">${activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
-                        <span class="item-value">${item['P/E'] || '-'}</span>
+                        <span class="item-value">${escapeHtml(item['P/E']) || '-'}</span>
                     </div>
                 </div>
             `;
@@ -488,55 +516,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`${API_BASE}/api/insiders?option=${encodeURIComponent(activeInsiderOption)}`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
-            const list = payload.data || [];
-
-            tbody.innerHTML = '';
-            if (list.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center;">${translations[activeLang].no_insider}</td></tr>`;
-                return;
-            }
-
-            list.forEach(item => {
-                const tr = document.createElement('tr');
-                const rawVal = item['Value ($)'] || 0;
-                
-                // Format transaction Type (Buy / Sell)
-                const isBuy = (item['Relationship'] && item['Transaction'].toLowerCase().includes('buy')) || rawVal > 0;
-                const txnText = isBuy ? translations[activeLang].txn_buy : translations[activeLang].txn_sell;
-                const txnClass = isBuy ? 'txn-buy' : 'txn-sell';
-
-                tr.innerHTML = `
-                    <td class="table-ticker">${item['Ticker'] || '-'}</td>
-                    <td title="${item['Relationship'] || '-'}">${item['Relationship'] || '-'}</td>
-                    <td>${item['Date'] || '-'}</td>
-                    <td class="${txnClass}">${txnText}</td>
-                    <td>${formatNumber(item['Cost'])}</td>
-                    <td>${formatNumber(item['#Shares'])}</td>
-                    <td>$${formatNumber(rawVal)}</td>
-                    <td>${formatNumber(item['#Shares Total'])}</td>
-                    <td>
-                        <a href="https://finviz.com/${item['SEC Form 4 Link']}" target="_blank" class="sec-link">
-                            Form 4 <i data-lucide="external-link"></i>
-                        </a>
-                    </td>
-                `;
-
-                // Clicking rows opens ticker details modal
-                tr.addEventListener('click', (e) => {
-                    if (e.target.tagName !== 'A' && !e.target.closest('a')) {
-                        openModal(item['Ticker']);
-                    }
-                });
-                tbody.appendChild(tr);
-            });
-
-            lucide.createIcons();
+            currentInsiderList = payload.data || [];
+            renderInsider(currentInsiderList);
             tabLoaded.insider = true;
         } catch (error) {
             console.error('Failed to load insider:', error);
             tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--bearish);">${translations[activeLang].err_insider}</td></tr>`;
         }
+    }
+
+    function renderInsider(list) {
+        const tbody = document.getElementById('insider-table-body');
+        tbody.innerHTML = '';
+        if (!list || list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center;">${translations[activeLang].no_insider}</td></tr>`;
+            return;
+        }
+
+        list.forEach(item => {
+            const tr = document.createElement('tr');
+            const rawVal = item['Value ($)'] || 0;
+            
+            // Format transaction Type (Buy / Sell)
+            const isBuy = (item['Relationship'] && item['Transaction'].toLowerCase().includes('buy')) || rawVal > 0;
+            const txnText = isBuy ? translations[activeLang].txn_buy : translations[activeLang].txn_sell;
+            const txnClass = isBuy ? 'txn-buy' : 'txn-sell';
+
+            tr.innerHTML = `
+                <td class="table-ticker">${escapeHtml(item['Ticker']) || '-'}</td>
+                <td title="${escapeHtml(item['Relationship']) || '-'}">${escapeHtml(item['Relationship']) || '-'}</td>
+                <td>${escapeHtml(item['Date']) || '-'}</td>
+                <td class="${txnClass}">${txnText}</td>
+                <td>${formatNumber(item['Cost'])}</td>
+                <td>${formatNumber(item['#Shares'])}</td>
+                <td>$${formatNumber(rawVal)}</td>
+                <td>${formatNumber(item['#Shares Total'])}</td>
+                <td>
+                    <a href="https://finviz.com/${escapeHtml(item['SEC Form 4 Link'])}" target="_blank" class="sec-link">
+                        Form 4 <i data-lucide="external-link"></i>
+                    </a>
+                </td>
+            `;
+
+            // Clicking rows opens ticker details modal
+            tr.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'A' && !e.target.closest('a')) {
+                    openModal(item['Ticker']);
+                }
+            });
+            tbody.appendChild(tr);
+        });
+
+        lucide.createIcons();
     }
 
     async function loadSectors(force = false) {
@@ -551,6 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`${API_BASE}/api/sectors`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
             const list = payload.data || [];
 
@@ -635,65 +669,93 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
 
-            grid.innerHTML = '';
-            sortedList.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'sector-card';
-
-                const { formatted: changeText, isBullish } = parseChange(item['Change']);
-                const barColor = isBullish ? 'bullish' : 'bearish';
-                const textValColor = isBullish ? 'positive' : 'negative';
-
-                // Map sector names if Chinese is active
-                const sectorName = getSectorName(item['Name']);
-
-                // Calculate bidirectional width based on max range of ±3%
-                let changeNum = parseFloat(item['Change']);
-                if (isNaN(changeNum)) changeNum = 0;
-                
-                const changePct = changeNum * 100;
-                const maxPct = 3.0; // limit scale at ±3%
-                const barWidthPct = Math.min(Math.abs(changePct) / maxPct, 1.0) * 50; // max 50% of the bar width
-                
-                let barStyle = '';
-                if (isBullish) {
-                    barStyle = `left: 50%; width: ${barWidthPct}%;`;
-                } else {
-                    barStyle = `left: ${50 - barWidthPct}%; width: ${barWidthPct}%;`;
-                }
-
-                card.innerHTML = `
-                    <div class="sector-name">${sectorName}</div>
-                    <div class="sector-metric">
-                        <span class="item-label">${translations[activeLang].metric_stocks}</span>
-                        <span class="item-value">${item['Stocks'] || '-'}</span>
-                    </div>
-                    <div class="sector-metric">
-                        <span class="item-label">${translations[activeLang].metric_mcap}</span>
-                        <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
-                    </div>
-                    <div class="sector-metric">
-                        <span class="item-label">${translations[activeLang].metric_recom}</span>
-                        <span class="item-value">${item['Recom'] || '-'}</span>
-                    </div>
-                    <div class="sector-metric">
-                        <span class="item-label">${translations[activeLang].metric_avg_change}</span>
-                        <span class="item-value" style="color: var(--${textValColor}); font-weight:600;">${changeText}</span>
-                    </div>
-                    <div class="sector-perf-bar">
-                        <div class="sector-perf-center"></div>
-                        <div class="sector-perf-fill ${barColor}" style="${barStyle}"></div>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
-
+            currentSectorsList = sortedList;
+            renderSectors(currentSectorsList);
             tabLoaded.sectors = true;
         } catch (error) {
             console.error('Failed to load sectors:', error);
             grid.innerHTML = `<div class="error-msg"><i data-lucide="alert-triangle"></i> ${translations[activeLang].err_sectors}</div>`;
             lucide.createIcons();
         }
+    }
+
+    function renderSectors(list) {
+        const grid = document.getElementById('sectors-grid');
+        grid.innerHTML = '';
+
+        if (!list || list.length === 0) return;
+
+        const getSectorName = (name) => {
+            if (activeLang === 'zh') {
+                const sectorMapping = {
+                    'Technology': '科技',
+                    'Financial': '金融',
+                    'Healthcare': '医疗保健',
+                    'Consumer Cyclical': '周期性消费',
+                    'Industrials': '工业',
+                    'Communication Services': '通讯服务',
+                    'Consumer Defensive': '防御性消费',
+                    'Energy': '能源',
+                    'Real Estate': '房地产',
+                    'Basic Materials': '基础材料',
+                    'Utilities': '公用事业'
+                };
+                return sectorMapping[name] || name;
+            }
+            return name;
+        };
+
+        list.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'sector-card';
+
+            const { formatted: changeText, isBullish } = parseChange(item['Change']);
+            const barColor = isBullish ? 'bullish' : 'bearish';
+            const textValColor = isBullish ? 'positive' : 'negative';
+
+            // Map sector names if Chinese is active
+            const sectorName = getSectorName(item['Name']);
+
+            // Calculate bidirectional width based on max range of ±3%
+            let changeNum = parseFloat(item['Change']);
+            if (isNaN(changeNum)) changeNum = 0;
+            
+            const changePct = changeNum * 100;
+            const maxPct = 3.0; // limit scale at ±3%
+            const barWidthPct = Math.min(Math.abs(changePct) / maxPct, 1.0) * 50; // max 50% of the bar width
+            
+            let barStyle = '';
+            if (isBullish) {
+                barStyle = `left: 50%; width: ${barWidthPct}%;`;
+            } else {
+                barStyle = `left: ${50 - barWidthPct}%; width: ${barWidthPct}%;`;
+            }
+
+            card.innerHTML = `
+                <div class="sector-name">${escapeHtml(sectorName)}</div>
+                <div class="sector-metric">
+                    <span class="item-label">${translations[activeLang].metric_stocks}</span>
+                    <span class="item-value">${item['Stocks'] || '-'}</span>
+                </div>
+                <div class="sector-metric">
+                    <span class="item-label">${translations[activeLang].metric_mcap}</span>
+                    <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
+                </div>
+                <div class="sector-metric">
+                    <span class="item-label">${translations[activeLang].metric_recom}</span>
+                    <span class="item-value">${item['Recom'] || '-'}</span>
+                </div>
+                <div class="sector-metric">
+                    <span class="item-label">${translations[activeLang].metric_avg_change}</span>
+                    <span class="item-value" style="color: var(--${textValColor}); font-weight:600;">${changeText}</span>
+                </div>
+                <div class="sector-perf-bar">
+                    <div class="sector-perf-center"></div>
+                    <div class="sector-perf-fill ${barColor}" style="${barStyle}"></div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
     }
 
     async function loadReddit(force = false) {
@@ -704,76 +766,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`${API_BASE}/api/reddit`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
             const list = payload.data || [];
 
-            tbody.innerHTML = '';
-            if (list.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No data found.</td></tr>`;
-                return;
-            }
-
-            // Slice to show top 50
-            const displayList = list.slice(0, 50);
-
-            displayList.forEach(item => {
-                const tr = document.createElement('tr');
-                
-                const rank = item['rank'] || '-';
-                const ticker = item['ticker'] || '-';
-                const name = item['name'] || '-';
-                const mentions = item['mentions'] || 0;
-                const upvotes = item['upvotes'] || 0;
-                const rank24h = item['rank_24h_ago'];
-
-                let trendText = '-';
-                let trendClass = 'trend-neutral';
-                let trendIcon = 'minus';
-                
-                if (rank24h !== undefined && rank24h !== null && rank24h !== '') {
-                    const rToday = parseInt(rank);
-                    const r24h = parseInt(rank24h);
-                    if (!isNaN(rToday) && !isNaN(r24h)) {
-                        const diff = r24h - rToday; // if today is 1 and 24h ago was 4, diff is +3 (climbed)
-                        if (diff > 0) {
-                            trendText = `+${diff}`;
-                            trendClass = 'trend-up';
-                            trendIcon = 'arrow-up';
-                        } else if (diff < 0) {
-                            trendText = `${diff}`;
-                            trendClass = 'trend-down';
-                            trendIcon = 'arrow-down';
-                        }
-                    }
-                }
-
-                tr.innerHTML = `
-                    <td class="table-rank">${rank}</td>
-                    <td class="table-ticker">${ticker}</td>
-                    <td>${name}</td>
-                    <td>${formatNumber(mentions)}</td>
-                    <td>${formatNumber(upvotes)}</td>
-                    <td class="${trendClass}">
-                        <span class="trend-badge">
-                            <i data-lucide="${trendIcon}" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i>
-                            ${trendText}
-                        </span>
-                    </td>
-                `;
-
-                // Clicking rows opens ticker details modal
-                tr.addEventListener('click', () => {
-                    openModal(ticker);
-                });
-                tbody.appendChild(tr);
-            });
-
-            lucide.createIcons();
+            currentRedditList = list;
+            renderReddit(currentRedditList);
             tabLoaded.reddit = true;
         } catch (error) {
             console.error('Failed to load Reddit sentiment:', error);
             tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--negative);">${translations[activeLang].err_reddit}</td></tr>`;
         }
+    }
+
+    function renderReddit(list) {
+        const tbody = document.getElementById('reddit-table-body');
+        tbody.innerHTML = '';
+        if (!list || list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No data found.</td></tr>`;
+            return;
+        }
+
+        // Slice to show top 50
+        const displayList = list.slice(0, 50);
+
+        displayList.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            const rank = item['rank'] || '-';
+            const ticker = item['ticker'] || '-';
+            const name = item['name'] || '-';
+            const mentions = item['mentions'] || 0;
+            const upvotes = item['upvotes'] || 0;
+            const rank24h = item['rank_24h_ago'];
+
+            let trendText = '-';
+            let trendClass = 'trend-neutral';
+            let trendIcon = 'minus';
+            
+            if (rank24h !== undefined && rank24h !== null && rank24h !== '') {
+                const rToday = parseInt(rank);
+                const r24h = parseInt(rank24h);
+                if (!isNaN(rToday) && !isNaN(r24h)) {
+                    const diff = r24h - rToday; // if today is 1 and 24h ago was 4, diff is +3 (climbed)
+                    if (diff > 0) {
+                        trendText = `+${diff}`;
+                        trendClass = 'trend-up';
+                        trendIcon = 'arrow-up';
+                    } else if (diff < 0) {
+                        trendText = `${diff}`;
+                        trendClass = 'trend-down';
+                        trendIcon = 'arrow-down';
+                    }
+                }
+            }
+
+            tr.innerHTML = `
+                <td class="table-rank">${escapeHtml(rank)}</td>
+                <td class="table-ticker">${escapeHtml(ticker)}</td>
+                <td>${escapeHtml(name)}</td>
+                <td>${formatNumber(mentions)}</td>
+                <td>${formatNumber(upvotes)}</td>
+                <td class="${trendClass}">
+                    <span class="trend-badge">
+                        <i data-lucide="${trendIcon}" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i>
+                        ${trendText}
+                    </span>
+                </td>
+            `;
+
+            // Clicking rows opens ticker details modal
+            tr.addEventListener('click', () => {
+                openModal(ticker);
+            });
+            tbody.appendChild(tr);
+        });
+
+        lucide.createIcons();
     }
 
     // 4. Detail Modal Sheet management
@@ -812,6 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 stockData = stockCache[ticker];
             } else {
                 const res = await fetch(`${API_BASE}/api/stock/${ticker}`);
+                if (!res.ok) throw new Error(`API error: ${res.status}`);
                 const payload = await res.json();
                 stockData = payload.data;
                 stockCache[ticker] = stockData;
@@ -897,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 stockData.news.slice(0, 10).forEach(news => {
                     const item = document.createElement('a');
                     item.className = 'news-item';
-                    item.href = news.Link;
+                    item.href = escapeHtml(news.Link);
                     item.target = '_blank';
 
                     // Parse date string for display
@@ -907,9 +977,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     item.innerHTML = `
-                        <div class="news-item-title">${news.Title}</div>
+                        <div class="news-item-title">${escapeHtml(news.Title)}</div>
                         <div class="news-item-meta">
-                            <span>${news.Source}</span> • 
+                            <span>${escapeHtml(news.Source)}</span> • 
                             <span>${displayDate}</span>
                         </div>
                     `;

@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -21,11 +21,12 @@ from finvizfinance.group.overview import Overview as GroupOverview
 app = FastAPI(title="US Stock Trading Opportunities API")
 
 # Enable CORS for local testing
+cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
@@ -89,7 +90,7 @@ class FallbackCache:
                 conn.close()
                 if row:
                     val, expires_at = row
-                    if expires_at > int(datetime.utcnow().timestamp()):
+                    if expires_at > int(datetime.now(timezone.utc).timestamp()):
                         return json.loads(val)
                     else:
                         self.delete(key)
@@ -110,9 +111,9 @@ class FallbackCache:
                 print("Redis cache set error:", e)
         else:
             try:
-                expires_at = int(datetime.utcnow().timestamp()) + expires_in
+                expires_at = int(datetime.now(timezone.utc).timestamp()) + expires_in
                 conn = sqlite3.connect(self.db_path)
-                cursor = cursor = conn.cursor()
+                cursor = conn.cursor()
                 cursor.execute(
                     "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
                     (key, val_str, expires_at)
@@ -182,13 +183,14 @@ def get_opportunities(signal: str = "Oversold"):
         
         data = []
         if df is not None:
-            # Handle float conversions to make output clean
+            df = df.fillna("")
             data = df.to_dict(orient="records")
             
         cache.set(cache_key, data, expires_in=7200) # 2 hours cache for screener
         return {"data": data, "source": "live"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] opportunities: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch opportunities data.")
 
 @app.get("/api/insiders")
 def get_insiders(option: str = "top owner trade"):
@@ -217,7 +219,8 @@ def get_insiders(option: str = "top owner trade"):
         cache.set(cache_key, data, expires_in=7200) # 2 hours cache
         return {"data": data, "source": "live"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] insiders: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch insider data.")
 
 @app.get("/api/sectors")
 def get_sectors():
@@ -238,7 +241,8 @@ def get_sectors():
         cache.set(cache_key, data, expires_in=14400) # 4 hours cache
         return {"data": data, "source": "live"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] sectors: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch sector data.")
 
 @app.get("/api/reddit")
 def get_reddit_sentiment():
@@ -257,7 +261,8 @@ def get_reddit_sentiment():
         else:
             raise HTTPException(status_code=res.status_code, detail="Failed to fetch from ApeWisdom")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] reddit: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch Reddit sentiment data.")
 
 @app.get("/api/stock/{ticker}")
 def get_stock(ticker: str):
@@ -305,10 +310,11 @@ def get_stock(ticker: str):
         cache.set(cache_key, res_info, expires_in=14400) # 4 hours cache for single stock data
         return {"data": res_info, "source": "live"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] stock {ticker}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch stock details.")
 
 # Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles
-public_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+public_path = os.path.join(project_root, "public")
 if os.path.exists(public_path):
     app.mount("/", StaticFiles(directory=public_path, html=True), name="static")

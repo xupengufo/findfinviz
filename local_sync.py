@@ -5,6 +5,18 @@ import time
 import requests
 import pandas as pd
 
+def retry_with_backoff(func, max_retries=3, base_delay=2):
+    """Execute a function with exponential backoff retry."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2 ** attempt)
+            print(f"  Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+            time.sleep(delay)
+
 # Load environment variables from .env.local
 env_file = ".env.local"
 if os.path.exists(env_file):
@@ -86,26 +98,34 @@ def sync_opportunities():
     
     for key, signal_name in signals.items():
         print(f"Scraping opportunities for signal: {signal_name}...")
-        try:
+
+        def do_scrape(sig=signal_name):
             foverview = Overview()
-            foverview.set_filter(signal=signal_name)
-            df = foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
+            foverview.set_filter(signal=sig)
+            return foverview.screener_view(limit=100, order="Market Cap.", ascend=False, verbose=0)
+
+        try:
+            df = retry_with_backoff(do_scrape)
             data = []
             if df is not None:
                 df = df.fillna("")
                 data = df.to_dict(orient="records")
             push_to_kv(f"opps_{key}", data)
-            time.sleep(1.5) # respect rate limits
+            time.sleep(1.5)
         except Exception as e:
-            print(f"Failed to scrape signal '{signal_name}':", e)
+            print(f"Failed to scrape signal '{signal_name}' after retries:", e)
 
 def sync_insiders():
     options = ["latest", "top week", "top owner trade"]
     for opt in options:
         print(f"Scraping insider trades for option: {opt}...")
+
+        def do_scrape(option=opt):
+            finsider = Insider(option=option)
+            return finsider.get_insider()
+
         try:
-            finsider = Insider(option=opt)
-            df = finsider.get_insider()
+            df = retry_with_backoff(do_scrape)
             data = []
             if df is not None:
                 df = df.fillna("")
@@ -114,33 +134,38 @@ def sync_insiders():
             push_to_kv(key_name, data)
             time.sleep(1.5)
         except Exception as e:
-            print(f"Failed to scrape insider option '{opt}':", e)
+            print(f"Failed to scrape insider option '{opt}' after retries:", e)
 
 def sync_sectors():
     print("Scraping sector performance matrix...")
-    try:
+    def do_scrape():
         fgoverview = GroupOverview()
-        df = fgoverview.screener_view(group="Sector")
+        return fgoverview.screener_view(group="Sector")
+
+    try:
+        df = retry_with_backoff(do_scrape)
         data = []
         if df is not None:
             df = df.fillna("")
             data = df.to_dict(orient="records")
         push_to_kv("sectors_performance", data)
     except Exception as e:
-        print("Failed to scrape sector matrix:", e)
+        print("Failed to scrape sector matrix after retries:", e)
 
 def sync_reddit():
     print("Scraping Reddit and WSB stock sentiment...")
-    try:
+    def do_fetch():
         res = requests.get("https://apewisdom.io/api/v1.0/filter/all-stocks", timeout=10)
-        if res.status_code == 200:
-            payload = res.json()
-            data = payload.get("results", [])
-            push_to_kv("reddit_sentiment", data)
-        else:
-            print("Failed to fetch from ApeWisdom:", res.status_code)
+        res.raise_for_status()
+        return res
+
+    try:
+        res = retry_with_backoff(do_fetch)
+        payload = res.json()
+        data = payload.get("results", [])
+        push_to_kv("reddit_sentiment", data)
     except Exception as e:
-        print("Failed to sync Reddit sentiment:", e)
+        print("Failed to sync Reddit sentiment after retries:", e)
 
 if __name__ == "__main__":
     print("Starting local sync to Vercel KV...")

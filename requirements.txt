@@ -1,8 +1,7 @@
-fastapi
-finvizfinance
-pandas
-lxml
-beautifulsoup4
-requests
-uvicorn
-redis
+fastapi==0.115.6
+pandas==2.2.3
+lxml==5.3.0
+beautifulsoup4==4.12.3
+requests==2.32.3
+uvicorn==0.34.0
+redis==5.2.1
