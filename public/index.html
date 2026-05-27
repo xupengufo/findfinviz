@@ -42,10 +42,16 @@
                     </div>
                 </nav>
 
+                <div class="search-box-wrap">
+                    <i data-lucide="search"></i>
+                    <input id="ticker-search" type="text" placeholder="Search ticker..." maxlength="10" autocomplete="off" spellcheck="false">
+                </div>
+
                 <div class="page-nav-right">
                     <div class="status-chip status-chip-positive">
                         <span class="status-pulse-dot"></span>
                         <span class="status-text" data-i18n="live_cache">Live Cache</span>
+                        <span id="data-timestamp" class="status-timestamp"></span>
                     </div>
                     <button id="lang-toggle" class="plain-button" aria-label="Toggle language" style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; width: 32px; height: 32px; border-radius: 50%;">
                         EN
@@ -96,6 +102,14 @@
                         <button class="signal-btn" data-signal="pullback" data-i18n="sig_pullback">Pullback</button>
                         <button class="signal-btn" data-signal="breakout_candidate" data-i18n="sig_breakout_candidate">Breakout Candidate</button>
                         <button class="signal-btn" data-signal="quality_compounder" data-i18n="sig_quality_compounder">Quality Compounder</button>
+                        <button class="signal-btn" data-signal="top_losers" data-i18n="sig_top_losers">Top Losers</button>
+                        <button class="signal-btn" data-signal="most_active" data-i18n="sig_most_active">Most Active</button>
+                        <button class="signal-btn" data-signal="most_volatile" data-i18n="sig_most_volatile">Most Volatile</button>
+                        <button class="signal-btn" data-signal="upgrades" data-i18n="sig_upgrades">Upgrades</button>
+                        <button class="signal-btn" data-signal="downgrades" data-i18n="sig_downgrades">Downgrades</button>
+                        <button class="signal-btn" data-signal="earnings_before" data-i18n="sig_earnings_before">Earnings Before</button>
+                        <button class="signal-btn" data-signal="earnings_after" data-i18n="sig_earnings_after">Earnings After</button>
+                        <button class="signal-btn" data-signal="recent_insider_buying" data-i18n="sig_recent_insider_buying">Recent Insider Buying</button>
                     </div>
                     
                     <!-- Opportunity Sort Controls -->

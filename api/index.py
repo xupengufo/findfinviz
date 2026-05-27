@@ -206,7 +206,7 @@ def get_opportunities(signal: str = "Oversold"):
     cache_key = f"opps_{signal.lower().replace(' ', '_')}"
     cached_data = cache.get(cache_key)
     if cached_data:
-        return {"data": cached_data, "source": "cache"}
+        return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
 
     # Supported signals
     supported_signals = {
@@ -217,8 +217,16 @@ def get_opportunities(signal: str = "Oversold"):
         "wedge_down": "Wedge Down",
         "triangle_ascending": "Triangle Ascending",
         "top_gainers": "Top Gainers",
+        "top_losers": "Top Losers",
         "new_high": "New High",
+        "most_active": "Most Active",
+        "most_volatile": "Most Volatile",
         "unusual_volume": "Unusual Volume",
+        "upgrades": "Upgrades",
+        "downgrades": "Downgrades",
+        "earnings_before": "Earnings Before",
+        "earnings_after": "Earnings After",
+        "recent_insider_buying": "Recent Insider Buying",
         "high_short_interest": "high_short_interest",
         "pullback": "pullback",
         "breakout_candidate": "breakout_candidate",
@@ -270,7 +278,7 @@ def get_opportunities(signal: str = "Oversold"):
             data = df.to_dict(orient="records")
             
         cache.set(cache_key, data, expires_in=7200) # 2 hours cache for screener
-        return {"data": data, "source": "live"}
+        return {"data": data, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         print(f"[ERROR] opportunities: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch opportunities data.")
@@ -280,7 +288,7 @@ def get_insiders(option: str = "top owner trade"):
     cache_key = f"insiders_{option.lower().replace(' ', '_')}"
     cached_data = cache.get(cache_key)
     if cached_data:
-        return {"data": cached_data, "source": "cache"}
+        return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
 
     supported_options = ["latest", "top week", "top owner trade"]
     if option not in supported_options:
@@ -300,7 +308,7 @@ def get_insiders(option: str = "top owner trade"):
             data = df.to_dict(orient="records")
             
         cache.set(cache_key, data, expires_in=7200) # 2 hours cache
-        return {"data": data, "source": "live"}
+        return {"data": data, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         print(f"[ERROR] insiders: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch insider data.")
@@ -310,7 +318,7 @@ def get_sectors():
     cache_key = "sectors_performance"
     cached_data = cache.get(cache_key)
     if cached_data:
-        return {"data": cached_data, "source": "cache"}
+        return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
 
     try:
         fgoverview = GroupOverview()
@@ -322,7 +330,7 @@ def get_sectors():
             data = df.to_dict(orient="records")
             
         cache.set(cache_key, data, expires_in=14400) # 4 hours cache
-        return {"data": data, "source": "live"}
+        return {"data": data, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         print(f"[ERROR] sectors: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch sector data.")
@@ -451,6 +459,13 @@ def get_confluences():
     pullback = cache.get("opps_pullback") or []
     breakout_candidate = cache.get("opps_breakout_candidate") or []
     quality_compounder = cache.get("opps_quality_compounder") or []
+    upgrades = cache.get("opps_upgrades") or []
+    downgrades = cache.get("opps_downgrades") or []
+    earnings_before = cache.get("opps_earnings_before") or []
+    earnings_after = cache.get("opps_earnings_after") or []
+    most_active = cache.get("opps_most_active") or []
+    top_losers = cache.get("opps_top_losers") or []
+    recent_insider_buying_signal = cache.get("opps_recent_insider_buying") or []
     
     insiders = cache.get("insiders_top_owner_trade") or []
     insiders_latest = cache.get("insiders_latest") or []
@@ -490,7 +505,10 @@ def get_confluences():
                     "strong_sector": False,
                     "pullback": False,
                     "breakout_candidate": False,
-                    "quality_compounder": False
+                    "quality_compounder": False,
+                    "analyst_upgrade": False,
+                    "earnings_catalyst": False,
+                    "momentum_leader": False
                 }
             }
         entry = tickers_map[t]
@@ -561,6 +579,30 @@ def get_confluences():
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["quality_compounder"] = True
 
+    for item in upgrades:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["analyst_upgrade"] = True
+
+    for item in earnings_before + earnings_after:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["earnings_catalyst"] = True
+
+    for item in most_active + top_losers:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["momentum_leader"] = True
+
+    for item in recent_insider_buying_signal:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["insider_buying"] = True
+
     for item in insiders + insiders_latest + insiders_top_week:
         ticker = item.get("Ticker")
         txn = item.get("Transaction")
@@ -591,12 +633,22 @@ def get_confluences():
         score = 0
         reasons = []
 
-        if e["Factors"]["reversal"]:
-            score += 30
-            reasons.append("Technical Reversal (超卖/底部构筑)")
-        elif e["Factors"]["breakout"]:
-            score += 20
-            reasons.append("Technical Breakout (新高/突破构筑)")
+        # Group 1: Reversal signals (mutually exclusive with breakout group)
+        if e["Factors"]["reversal"] or e["Factors"]["pullback"]:
+            if e["Factors"]["reversal"]:
+                score += 30
+                reasons.append("Technical Reversal (超卖/底部构筑)")
+            if e["Factors"]["pullback"]:
+                score += 25
+                reasons.append("Trend Pullback (均线趋势回调)")
+        # Group 2: Breakout signals (only if no reversal signals)
+        elif e["Factors"]["breakout"] or e["Factors"]["breakout_candidate"]:
+            if e["Factors"]["breakout"]:
+                score += 20
+                reasons.append("Technical Breakout (新高/突破构筑)")
+            if e["Factors"]["breakout_candidate"]:
+                score += 25
+                reasons.append("Breakout Candidate (放量临近历史高点)")
         
         if e["Factors"]["volume_spike"]:
             score += 15
@@ -623,17 +675,21 @@ def get_confluences():
                 score += 10
                 reasons.append("High Short Float (高卖空比例)")
 
-        if e["Factors"]["pullback"]:
-            score += 25
-            reasons.append("Trend Pullback (均线趋势回调)")
-
-        if e["Factors"]["breakout_candidate"]:
-            score += 25
-            reasons.append("Breakout Candidate (放量临近历史高点)")
-
         if e["Factors"]["quality_compounder"]:
             score += 20
             reasons.append("Quality Compounder (高ROE低负债绩优)")
+
+        if e["Factors"]["analyst_upgrade"]:
+            score += 20
+            reasons.append("Analyst Upgrade (分析师评级上调)")
+
+        if e["Factors"]["earnings_catalyst"]:
+            score += 15
+            reasons.append("Earnings Catalyst (财报催化剂)")
+
+        if e["Factors"]["momentum_leader"]:
+            score += 10
+            reasons.append("Market Leader (市场主力关注)")
 
         # 计算纯技术面评分 TechScore
         tech_score = 0
@@ -680,11 +736,11 @@ def get_confluences():
         e["Score"] = min(score, 100)
         e["Reasons"] = reasons
 
-        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"] or e["Factors"]["pullback"] or e["Factors"]["breakout_candidate"] or e["Factors"]["quality_compounder"]):
+        if e["Score"] >= 40 and (e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"] or e["Factors"]["insider_buying"] or e["Factors"]["pullback"] or e["Factors"]["breakout_candidate"] or e["Factors"]["quality_compounder"] or e["Factors"]["analyst_upgrade"] or e["Factors"]["earnings_catalyst"] or e["Factors"]["momentum_leader"]):
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
-    return {"data": res_list, "source": "live"}
+    return {"data": res_list, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
 
 # Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles

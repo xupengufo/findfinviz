@@ -46,6 +46,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cache for stock details to allow instant modal transitions
     const stockCache = {};
 
+    function updateTimestamp(payload) {
+        const tsEl = document.getElementById('data-timestamp');
+        if (tsEl && payload && payload.updated_at) {
+            try {
+                const d = new Date(payload.updated_at);
+                const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                tsEl.textContent = timeStr;
+            } catch(e) {
+                tsEl.textContent = '';
+            }
+        }
+    }
+
     // Translations Dictionary
     const translations = {
         en: {
@@ -133,6 +146,14 @@ document.addEventListener('DOMContentLoaded', () => {
             confluences_subtitle: "Stocks aligning technical reversals/breakouts, institutional volume, insider buying, and retail sentiment.",
             sig_unusual_volume: "Unusual Volume",
             sig_high_short_interest: "High Short Float",
+            sig_top_losers: "Top Losers",
+            sig_most_active: "Most Active",
+            sig_most_volatile: "Most Volatile",
+            sig_upgrades: "Upgrades",
+            sig_downgrades: "Downgrades",
+            sig_earnings_before: "Earnings Before",
+            sig_earnings_after: "Earnings After",
+            sig_recent_insider_buying: "Recent Insider Buying",
             chart_static: "Static",
             chart_tv: "TradingView",
             loading_confluences: "Computing smart setups...",
@@ -225,6 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
             confluences_subtitle: "自动挖掘在技术面、机构资金（放量）、高管增持及散户讨论度多维度产生共振的高胜率股票。",
             sig_unusual_volume: "异常放量",
             sig_high_short_interest: "高空头占比",
+            sig_top_losers: "最大跌幅",
+            sig_most_active: "最活跃交易",
+            sig_most_volatile: "最高波动",
+            sig_upgrades: "分析师上调",
+            sig_downgrades: "分析师下调",
+            sig_earnings_before: "盘前财报",
+            sig_earnings_after: "盘后财报",
+            sig_recent_insider_buying: "近期高管增持",
             chart_static: "静态走势图",
             chart_tv: "TradingView 动态图",
             loading_confluences: "正在挖掘多维共振股票...",
@@ -360,6 +389,21 @@ document.addEventListener('DOMContentLoaded', () => {
         langToggleBtn.addEventListener('click', () => {
             const nextLang = activeLang === 'zh' ? 'en' : 'zh';
             setLanguage(nextLang);
+        });
+    }
+
+    // Ticker Search
+    const searchInput = document.getElementById('ticker-search');
+    if (searchInput) {
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const ticker = searchInput.value.trim().toUpperCase();
+                if (ticker) {
+                    openModal(ticker);
+                    searchInput.value = '';
+                    searchInput.blur();
+                }
+            }
         });
     }
 
@@ -564,6 +608,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const label = activeLang === 'zh' ? '优质复利' : 'Quality Compounder';
                 badges.push(`<span class="card-badge card-badge-strategy-quality"><i data-lucide="award" style="width:10px;height:10px;"></i> ${label}</span>`);
             }
+            if (item['Factors']['analyst_upgrade']) {
+                const label = activeLang === 'zh' ? '分析师上调' : 'Analyst Upgrade';
+                badges.push(`<span class="card-badge card-badge-strategy-quality"><i data-lucide="thumbs-up" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['earnings_catalyst']) {
+                const label = activeLang === 'zh' ? '财报催化' : 'Earnings Catalyst';
+                badges.push(`<span class="card-badge card-badge-rvol"><i data-lucide="calendar" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['momentum_leader']) {
+                const label = activeLang === 'zh' ? '主力关注' : 'Market Leader';
+                badges.push(`<span class="card-badge"><i data-lucide="bar-chart-2" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
         }
 
         if (badges.length === 0) return '';
@@ -585,6 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/confluences`);
             if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
+            updateTimestamp(payload);
             if (payload.status === 'empty') {
                 grid.innerHTML = `<div class="no-data"><i data-lucide="alert-circle"></i> ${translations[activeLang].confluence_cache_empty || payload.message}</div>`;
                 lucide.createIcons();
@@ -716,6 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/opportunities?signal=${activeSignal}`);
             if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
+            updateTimestamp(payload);
             currentOppsList = payload.data || [];
             
             renderOpportunities(currentOppsList);
@@ -794,6 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/insiders?option=${encodeURIComponent(activeInsiderOption)}`);
             if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
+            updateTimestamp(payload);
             currentInsiderList = payload.data || [];
             renderInsider(currentInsiderList);
             tabLoaded.insider = true;
@@ -862,6 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/sectors`);
             if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
+            updateTimestamp(payload);
             const list = payload.data || [];
 
             // Sort sectors by daily change descending (highest change/strongest first)

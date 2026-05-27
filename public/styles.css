@@ -1402,3 +1402,59 @@ html[data-theme=dark] .segmented button.active {
     border: 1px solid var(--border);
 }
 
+/* Search Box */
+.search-box-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-box-wrap:focus-within {
+    border-color: var(--brand-gold);
+    box-shadow: 0 0 0 3px var(--gold-wash);
+}
+
+.search-box-wrap i {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+#ticker-search {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    width: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#ticker-search::placeholder {
+    color: var(--text-dark);
+    text-transform: none;
+    font-weight: 500;
+    letter-spacing: normal;
+}
+
+/* Data Timestamp */
+.status-timestamp {
+    font-size: 0.55rem;
+    color: var(--text-dark);
+    display: block;
+    margin-top: 1px;
+}
+
+/* Signal buttons overflow scroll */
+.signal-selector {
+    flex-wrap: wrap;
+}
