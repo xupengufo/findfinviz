@@ -364,10 +364,6 @@ def get_stock(ticker: str):
 
 @app.get("/api/confluences")
 def get_confluences():
-    cache_key = "confluences_all"
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return {"data": cached_data, "source": "cache"}
 
     oversold = cache.get("opps_oversold") or []
     double_bottom = cache.get("opps_double_bottom") or []
@@ -611,7 +607,6 @@ def get_confluences():
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
-    cache.set(cache_key, res_list, expires_in=7200) # 2 hours cache
     return {"data": res_list, "source": "live"}
 
 # Serve static frontend files (works locally and packaged in Vercel)
