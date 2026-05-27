@@ -12,6 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+finviz_dir = os.path.join(project_root, "finvizfinance")
+if finviz_dir not in sys.path:
+    sys.path.insert(0, finviz_dir)
 
 from finvizfinance.quote import finvizfinance
 from finvizfinance.insider import Insider

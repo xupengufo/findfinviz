@@ -55,7 +55,12 @@ else:
     sys.exit(1)
 
 # Import local finvizfinance package
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+finviz_dir = os.path.join(project_root, "finvizfinance")
+if finviz_dir not in sys.path:
+    sys.path.insert(0, finviz_dir)
 from finvizfinance.insider import Insider
 from finvizfinance.screener.overview import Overview
 from finvizfinance.group.overview import Overview as GroupOverview
