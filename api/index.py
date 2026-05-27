@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timezone
 import requests
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add project root to sys.path to find the cloned finvizfinance package
@@ -21,6 +21,7 @@ from finvizfinance.insider import Insider
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.custom import Custom
 from finvizfinance.group.overview import Overview as GroupOverview
+from local_sync import run_all_sync
 
 app = FastAPI(title="US Stock Trading Opportunities API")
 
@@ -56,9 +57,13 @@ class FallbackCache:
                 self.is_redis = False
                 
         if not self.is_redis:
-            self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
-            if not os.path.exists(self.db_path):
-                self.db_path = os.path.join(project_root, "cache.db")
+            # Resolve db path defensively for Vercel read-only filesystem
+            if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
+                self.db_path = "/tmp/cache.db"
+            else:
+                self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
+                if not os.path.exists(os.path.dirname(self.db_path)):
+                    self.db_path = os.path.join(project_root, "cache.db")
             try:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
@@ -67,8 +72,22 @@ class FallbackCache:
                 )
                 conn.commit()
                 conn.close()
+                self.cleanup_expired()
             except Exception as e:
                 print("Failed to initialize SQLite cache:", e)
+
+    def cleanup_expired(self):
+        if not self.is_redis:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                now = int(datetime.now(timezone.utc).timestamp())
+                cursor.execute("DELETE FROM cache WHERE expires_at < ?", (now,))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print("Failed to clean up expired SQLite cache:", e)
+
 
     def get(self, key: str):
         if self.is_redis:
@@ -138,6 +157,7 @@ class FallbackCache:
                 )
                 conn.commit()
                 conn.close()
+                self.cleanup_expired()
             except Exception as e:
                 print("SQLite cache set error:", e)
 
@@ -166,6 +186,20 @@ cache = FallbackCache()
 @app.get("/api/health")
 def health():
     return {"status": "ok", "vercel_kv": cache.is_redis}
+
+@app.get("/api/sync")
+def trigger_sync(background_tasks: BackgroundTasks, api_key: str = None):
+    expected_key = os.environ.get("SYNC_API_KEY")
+    if os.environ.get("VERCEL") and not expected_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Sync API key is not configured in environment variables."
+        )
+    if expected_key and api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+        
+    background_tasks.add_task(run_all_sync)
+    return {"status": "sync_triggered", "message": "Synchronization started in the background."}
 
 @app.get("/api/opportunities")
 def get_opportunities(signal: str = "Oversold"):
@@ -325,14 +359,52 @@ def get_stock(ticker: str):
         if not stock.flag:
             raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found on FinViz.")
             
-        info = stock.ticker_full_info()
+        info = {}
+        try:
+            info["fundament"] = stock.ticker_fundament()
+        except Exception as fund_err:
+            print(f"Error fetching fundament for {ticker}: {fund_err}")
+            info["fundament"] = {}
+            
+        try:
+            info["ratings_outer"] = stock.ticker_outer_ratings()
+        except Exception as ratings_err:
+            print(f"Error fetching ratings for {ticker}: {ratings_err}")
+            info["ratings_outer"] = None
+            
+        try:
+            info["news"] = stock.ticker_news()
+        except Exception as news_err:
+            print(f"Error fetching news for {ticker}: {news_err}")
+            info["news"] = None
+            
+        try:
+            info["inside trader"] = stock.ticker_inside_trader()
+        except Exception as insider_err:
+            print(f"Error fetching insider trader for {ticker}: {insider_err}")
+            info["inside trader"] = None
         
         res_info = {
             "fundament": info.get("fundament", {}),
-            "description": stock.ticker_description(),
-            "peers": stock.ticker_peer(),
-            "etfs": stock.ticker_etf_holders(),
+            "description": "",
+            "peers": [],
+            "etfs": [],
         }
+        
+        try:
+            res_info["description"] = stock.ticker_description()
+        except Exception as desc_err:
+            print(f"Error fetching description for {ticker}: {desc_err}")
+            
+        try:
+            res_info["peers"] = stock.ticker_peer()
+        except Exception as peer_err:
+            print(f"Error fetching peers for {ticker}: {peer_err}")
+            
+        try:
+            res_info["etfs"] = stock.ticker_etf_holders()
+        except Exception as etf_err:
+            print(f"Error fetching etfs for {ticker}: {etf_err}")
         
         if info.get("ratings_outer") is not None:
             df_ratings = info["ratings_outer"].copy().fillna("")
@@ -364,6 +436,11 @@ def get_stock(ticker: str):
 
 @app.get("/api/confluences")
 def get_confluences():
+    # Detect empty cache state
+    if (cache.get("opps_oversold") is None or 
+        cache.get("opps_double_bottom") is None or 
+        cache.get("insiders_top_owner_trade") is None):
+        return {"status": "empty", "message": "Cache is empty. Please run sync first.", "data": []}
 
     oversold = cache.get("opps_oversold") or []
     double_bottom = cache.get("opps_double_bottom") or []

@@ -40,6 +40,8 @@ is_redis = bool(redis_url)
 project_root = os.path.dirname(os.path.abspath(__file__))
 
 def get_db_path():
+    if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
+        return "/tmp/cache.db"
     api_db = os.path.join(project_root, "api", "cache.db")
     if os.path.exists(os.path.dirname(api_db)):
         return api_db
@@ -241,10 +243,13 @@ def sync_reddit():
     except Exception as e:
         print("Failed to sync Reddit sentiment after retries:", e)
 
-if __name__ == "__main__":
-    print("Starting local sync to Vercel KV...")
+def run_all_sync():
     sync_opportunities()
     sync_insiders()
     sync_sectors()
     sync_reddit()
+
+if __name__ == "__main__":
+    print("Starting local sync to Vercel KV...")
+    run_all_sync()
     print("Sync completed successfully!")

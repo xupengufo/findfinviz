@@ -137,7 +137,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chart_tv: "TradingView",
             loading_confluences: "Computing smart setups...",
             no_confluences: "No confluence setups matching criteria right now.",
-            err_confluences: "Error: Failed to fetch confluences from API."
+            err_confluences: "Error: Failed to fetch confluences from API.",
+            confluence_cache_empty: "The Smart Picks cache is empty. Please run sync first to populate it."
         },
         zh: {
             tab_opps: "技术选股",
@@ -228,7 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chart_tv: "TradingView 动态图",
             loading_confluences: "正在挖掘多维共振股票...",
             no_confluences: "当前未发现符合共振筛选标准的股票。",
-            err_confluences: "错误：无法加载智能共振选股数据。"
+            err_confluences: "错误：无法加载智能共振选股数据。",
+            confluence_cache_empty: "智能共振选股缓存为空。请运行数据同步以生成共振推荐列表。"
         }
     };
 
@@ -265,6 +267,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabLoaded.insider) renderInsider(currentInsiderList);
         if (tabLoaded.sectors) renderSectors(currentSectorsList);
         if (tabLoaded.reddit) renderReddit(currentRedditList);
+
+        // Reload TradingView widget if modal is open and TradingView chart is active
+        const modal = document.getElementById('ticker-modal');
+        const tvBtn = document.getElementById('chart-tv-btn');
+        if (modal && modal.classList.contains('active') && tvBtn && tvBtn.classList.contains('active')) {
+            const currentTicker = document.getElementById('modal-ticker').innerText;
+            if (currentTicker) {
+                loadTradingViewWidget(currentTicker);
+            }
+        }
     }
 
     // Helper to robustly parse and format FinViz percent/float changes
@@ -573,6 +585,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE}/api/confluences`);
             if (!res.ok) throw new Error(`API error: ${res.status}`);
             const payload = await res.json();
+            if (payload.status === 'empty') {
+                grid.innerHTML = `<div class="no-data"><i data-lucide="alert-circle"></i> ${translations[activeLang].confluence_cache_empty || payload.message}</div>`;
+                lucide.createIcons();
+                tabLoaded.confluences = false;
+                return;
+            }
             currentConfluencesList = payload.data || [];
             
             renderConfluences(currentConfluencesList);

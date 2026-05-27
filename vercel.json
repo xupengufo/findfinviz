@@ -9,6 +9,17 @@
     },
     { "src": "public/**", "use": "@vercel/static" }
   ],
+  "headers": [
+    {
+      "source": "/(styles.css|app.js)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, must-revalidate"
+        }
+      ]
+    }
+  ],
   "routes": [
     { "src": "/api/(.*)", "dest": "api/index.py" },
     { "src": "/styles.css", "dest": "public/styles.css" },
