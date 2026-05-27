@@ -405,6 +405,7 @@ def get_confluences():
                 "ROE": roe or "",
                 "Debt/Eq": debt_equity or "",
                 "Score": 0,
+                "TechScore": 0,
                 "Reasons": [],
                 "Factors": {
                     "reversal": False,
@@ -561,6 +562,48 @@ def get_confluences():
             score += 20
             reasons.append("Quality Compounder (高ROE低负债绩优)")
 
+        # 计算纯技术面评分 TechScore
+        tech_score = 0
+        
+        # 1. 核心形态得分 (最高 35)
+        if e["Factors"]["breakout"]:
+            tech_score += 35
+        elif e["Factors"]["breakout_candidate"]:
+            tech_score += 30
+        elif e["Factors"]["pullback"]:
+            tech_score += 25
+        elif e["Factors"]["reversal"]:
+            tech_score += 25
+            
+        # 2. 成交量配合得分 (最高 25)
+        try:
+            rvol = float(e["Rel Volume"]) if e["Rel Volume"] else 0
+            if rvol >= 2.0:
+                tech_score += 25
+            elif rvol >= 1.5:
+                tech_score += 15
+            elif rvol >= 1.0:
+                tech_score += 10
+        except:
+            pass
+            
+        # 3. 价格动量配合得分 (最高 20)
+        try:
+            change_pct = float(str(e["Change"]).replace("%", "").strip())
+            if change_pct > 5.0:
+                tech_score += 20
+            elif change_pct > 2.0:
+                tech_score += 15
+            elif change_pct > 0:
+                tech_score += 10
+        except:
+            pass
+            
+        # 4. 趋势状态调整 (最高 20)
+        if e["Factors"]["volume_spike"]:
+            tech_score += 20
+            
+        e["TechScore"] = min(tech_score, 100)
         e["Score"] = min(score, 100)
         e["Reasons"] = reasons
 

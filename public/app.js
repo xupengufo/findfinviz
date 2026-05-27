@@ -608,6 +608,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 scoreClass = 'score-high';
             }
 
+            let techScoreClass = '';
+            if (item['TechScore'] >= 80) {
+                techScoreClass = 'tech-score-veryhigh';
+            } else if (item['TechScore'] >= 60) {
+                techScoreClass = 'tech-score-high';
+            }
+
             let reasonsHtml = '';
             if (item['Reasons'] && item['Reasons'].length > 0) {
                 const tags = item['Reasons'].map(r => `<span class="confluence-reason-tag">${escapeHtml(r)}</span>`).join('');
@@ -629,9 +636,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
                         <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
                     </div>
-                    <div class="confluence-score-wrap">
-                        <span class="confluence-score-indicator ${scoreClass}">${item['Score']}</span>
-                        <span class="confluence-score-label">${activeLang === 'zh' ? '共振评分' : 'Match Score'}</span>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <div class="tech-score-wrap">
+                            <span class="tech-score-indicator ${techScoreClass}">${item['TechScore'] || 0}</span>
+                            <span class="confluence-score-label">${activeLang === 'zh' ? '技术评分' : 'Tech Score'}</span>
+                        </div>
+                        <div class="confluence-score-wrap">
+                            <span class="confluence-score-indicator ${scoreClass}">${item['Score']}</span>
+                            <span class="confluence-score-label">${activeLang === 'zh' ? '共振评分' : 'Match Score'}</span>
+                        </div>
                     </div>
                 </div>
                 
