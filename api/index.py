@@ -43,6 +43,14 @@ class FallbackCache:
         self.redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
         self.is_redis = bool(self.redis_url)
         
+        # Always resolve db path defensively for local fallback
+        if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
+            self.db_path = "/tmp/cache.db"
+        else:
+            self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
+            if not os.path.exists(os.path.dirname(self.db_path)):
+                self.db_path = os.path.join(project_root, "cache.db")
+
         if self.is_redis:
             try:
                 if self.redis_url.startswith("http"):
@@ -56,25 +64,17 @@ class FallbackCache:
                 print("Failed to connect to Redis, falling back to SQLite:", e)
                 self.is_redis = False
                 
-        if not self.is_redis:
-            # Resolve db path defensively for Vercel read-only filesystem
-            if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
-                self.db_path = "/tmp/cache.db"
-            else:
-                self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
-                if not os.path.exists(os.path.dirname(self.db_path)):
-                    self.db_path = os.path.join(project_root, "cache.db")
-            try:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(
-                    "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
-                )
-                conn.commit()
-                conn.close()
-                self.cleanup_expired()
-            except Exception as e:
-                print("Failed to initialize SQLite cache:", e)
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
+            )
+            conn.commit()
+            conn.close()
+            self.cleanup_expired()
+        except Exception as e:
+            print("Failed to initialize SQLite cache:", e)
 
     def cleanup_expired(self):
         if not self.is_redis:
@@ -824,6 +824,90 @@ def get_confluences():
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
     return {"data": res_list, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
+
+@app.get("/api/wsb-calendar")
+def get_wsb_calendar():
+    cache_key = "wsb_important_events_calendar"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
+        
+    try:
+        res = requests.get("https://www.marketgrep.com/api/sentiment-report", timeout=10)
+        if res.status_code != 200:
+            raise HTTPException(status_code=res.status_code, detail="Failed to fetch sentiment report from marketgrep")
+            
+        payload = res.json()
+        
+        report_zh = payload.get("report_markdown", "")
+        report_en = payload.get("report_markdown_en", "")
+        
+        def extract_table(markdown_content, title_marker):
+            if not markdown_content:
+                return []
+            lines = markdown_content.split('\n')
+            table_lines = []
+            found = False
+            for line in lines:
+                if title_marker in line:
+                    found = True
+                    continue
+                if found:
+                    cleaned = line.strip()
+                    if cleaned.startswith('|'):
+                        table_lines.append(cleaned)
+                    elif len(table_lines) > 0:
+                        break
+            if not table_lines:
+                return []
+            
+            headers = [h.strip() for h in table_lines[0].split('|')[1:-1]]
+            rows = []
+            for line in table_lines[2:]:
+                cols = [c.strip() for c in line.split('|')[1:-1]]
+                if len(cols) >= len(headers):
+                    row_dict = {}
+                    for i, h in enumerate(headers):
+                        row_dict[h] = cols[i]
+                    rows.append(row_dict)
+            return rows
+
+        events_zh = extract_table(report_zh, "4.3")
+        events_en = extract_table(report_en, "4.3")
+        
+        calendar_data = {
+            "zh": [],
+            "en": []
+        }
+        
+        for item in events_zh:
+            keys = list(item.keys())
+            if len(keys) >= 3:
+                calendar_data["zh"].append({
+                    "date": item.get(keys[0], ""),
+                    "event": item.get(keys[1], ""),
+                    "focus": item.get(keys[2], "")
+                })
+                
+        for item in events_en:
+            keys = list(item.keys())
+            if len(keys) >= 3:
+                calendar_data["en"].append({
+                    "date": item.get(keys[0], ""),
+                    "event": item.get(keys[1], ""),
+                    "focus": item.get(keys[2], "")
+                })
+        
+        if not calendar_data["en"] and calendar_data["zh"]:
+            calendar_data["en"] = calendar_data["zh"]
+        elif not calendar_data["zh"] and calendar_data["en"]:
+            calendar_data["zh"] = calendar_data["en"]
+            
+        cache.set(cache_key, calendar_data, expires_in=7200) # 2 hours cache
+        return {"data": calendar_data, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        print(f"[ERROR] wsb-calendar: {e}")
+        return {"data": {"zh": [], "en": []}, "source": "error", "error": str(e)}
 
 # Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles

@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSectorsList = [];
     let currentRedditList = [];
     let currentConfluencesList = [];
+    let currentWsbCalendar = null;
     
     // API URL configuration (works for both local development and Vercel)
     const API_BASE = window.location.origin;
@@ -168,7 +169,14 @@ document.addEventListener('DOMContentLoaded', () => {
             sector_top_opportunities: "Top Confluence Opportunities",
             industry_name: "Industry",
             industry_change: "Change",
-            industry_stocks: "Stocks"
+            industry_stocks: "Stocks",
+            wsb_calendar_title: "WSB Important Events Calendar",
+            reddit_trending_title: "Trending Tickers (ApeWisdom)",
+            th_calendar_date: "Date",
+            th_calendar_event: "Event",
+            th_calendar_focus: "Community Focus",
+            loading_wsb_calendar: "Loading WSB Important Events Calendar...",
+            err_wsb_calendar: "Error: Failed to load WSB Important Events Calendar."
         },
         zh: {
             tab_opps: "技术选股",
@@ -277,7 +285,14 @@ document.addEventListener('DOMContentLoaded', () => {
             sector_top_opportunities: "板块内共振机会个股",
             industry_name: "细分行业",
             industry_change: "今日涨跌",
-            industry_stocks: "成份股数"
+            industry_stocks: "成份股数",
+            wsb_calendar_title: "WSB 重要事件日历",
+            reddit_trending_title: "ApeWisdom 散户热度榜",
+            th_calendar_date: "日期",
+            th_calendar_event: "事件",
+            th_calendar_focus: "社区关注点",
+            loading_wsb_calendar: "正在加载 WSB 重要事件日历...",
+            err_wsb_calendar: "错误：无法加载 WSB 重要事件日历。"
         }
     };
 
@@ -313,7 +328,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabLoaded.confluences) renderConfluences(currentConfluencesList);
         if (tabLoaded.insider) renderInsider(currentInsiderList);
         if (tabLoaded.sectors) renderSectors(currentSectorsList);
-        if (tabLoaded.reddit) renderReddit(currentRedditList);
+        if (tabLoaded.reddit) {
+            renderReddit(currentRedditList);
+            if (currentWsbCalendar) {
+                renderWsbCalendar(currentWsbCalendar);
+            }
+        }
 
         // Reload TradingView widget if modal is open and TradingView chart is active
         const modal = document.getElementById('ticker-modal');
@@ -1167,6 +1187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadReddit(force = false) {
+        // Trigger calendar loading in parallel
+        loadWsbCalendar(force);
+
         if (tabLoaded.reddit && !force) return;
 
         const tbody = document.getElementById('reddit-table-body');
@@ -1251,6 +1274,59 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         lucide.createIcons();
+    }
+
+    async function loadWsbCalendar(force = false) {
+        if (currentWsbCalendar && !force) return;
+
+        const tbody = document.getElementById('wsb-calendar-table-body');
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">${translations[activeLang].loading_wsb_calendar}</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/wsb-calendar`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const payload = await res.json();
+            currentWsbCalendar = payload.data || { zh: [], en: [] };
+            renderWsbCalendar(currentWsbCalendar);
+        } catch (error) {
+            console.error('Failed to load WSB calendar:', error);
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--negative);">${translations[activeLang].err_wsb_calendar}</td></tr>`;
+        }
+    }
+
+    function renderWsbCalendar(calendar) {
+        const tbody = document.getElementById('wsb-calendar-table-body');
+        tbody.innerHTML = '';
+
+        const list = calendar[activeLang] || [];
+        if (list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No calendar events found. / 暂无重要事件。</td></tr>`;
+            return;
+        }
+
+        list.forEach(item => {
+            const tr = document.createElement('tr');
+
+            const dateTd = document.createElement('td');
+            dateTd.className = 'font-mono';
+            dateTd.style.fontWeight = '600';
+            dateTd.style.color = 'var(--primary)';
+            dateTd.textContent = item.date || '-';
+
+            const eventTd = document.createElement('td');
+            eventTd.style.fontWeight = '500';
+            eventTd.textContent = item.event || '-';
+
+            const focusTd = document.createElement('td');
+            focusTd.style.color = 'var(--text-muted)';
+            focusTd.textContent = item.focus || '-';
+
+            tr.appendChild(dateTd);
+            tr.appendChild(eventTd);
+            tr.appendChild(focusTd);
+
+            tbody.appendChild(tr);
+        });
     }
 
     // 4. Detail Modal Sheet management

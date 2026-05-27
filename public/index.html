@@ -205,8 +205,37 @@
                     </div>
                 </div>
 
-                <div class="table-container">
-                    <table class="insider-table">
+                <!-- Section 1: WSB Important Events Calendar -->
+                <div class="filter-bar" style="margin-top: 15px; border-bottom: none; padding-bottom: 0;">
+                    <div class="filter-title" style="gap: 8px;">
+                        <i data-lucide="calendar" style="color: var(--primary);"></i>
+                        <h3 data-i18n="wsb_calendar_title" style="margin: 0; font-size: 1.1rem; font-weight: 600;">WSB Important Events Calendar</h3>
+                    </div>
+                </div>
+                <div class="table-container surface-card" style="margin-top: 10px; margin-bottom: 30px;">
+                    <table class="premium-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="th_calendar_date" style="width: 18%;">Date</th>
+                                <th data-i18n="th_calendar_event" style="width: 42%;">Event</th>
+                                <th data-i18n="th_calendar_focus" style="width: 40%;">Community Focus</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wsb-calendar-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Section 2: ApeWisdom Reddit Mentions -->
+                <div class="filter-bar" style="border-bottom: none; padding-bottom: 0;">
+                    <div class="filter-title" style="gap: 8px;">
+                        <i data-lucide="trending-up" style="color: var(--primary);"></i>
+                        <h3 data-i18n="reddit_trending_title" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Trending Tickers (ApeWisdom)</h3>
+                    </div>
+                </div>
+                <div class="table-container surface-card" style="margin-top: 10px;">
+                    <table class="premium-table">
                         <thead>
                             <tr>
                                 <th data-i18n="th_rank">Rank</th>
