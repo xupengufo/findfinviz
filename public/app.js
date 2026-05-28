@@ -964,7 +964,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawVal = item['Value ($)'] || 0;
             
             // Format transaction Type (Buy / Sell)
-            const isBuy = (item['Relationship'] && item['Transaction'].toLowerCase().includes('buy')) || rawVal > 0;
+            const txnLower = (item['Transaction'] || '').toLowerCase();
+            const isBuy = txnLower.includes('buy') || txnLower.includes('exercise') || txnLower.includes('purchase');
             const txnText = isBuy ? translations[activeLang].txn_buy : translations[activeLang].txn_sell;
             const txnClass = isBuy ? 'txn-buy' : 'txn-sell';
 
