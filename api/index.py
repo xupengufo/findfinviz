@@ -827,7 +827,7 @@ def get_confluences():
 
 @app.get("/api/wsb-calendar")
 def get_wsb_calendar():
-    cache_key = "wsb_important_events_calendar"
+    cache_key = "wsb_important_events_calendar_v2"
     cached_data = cache.get(cache_key)
     if cached_data:
         return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -872,8 +872,8 @@ def get_wsb_calendar():
                     rows.append(row_dict)
             return rows
 
-        events_zh = extract_table(report_zh, "4.3")
-        events_en = extract_table(report_en, "4.3")
+        events_zh = extract_table(report_zh, "### 4.3")
+        events_en = extract_table(report_en, "### 4.3")
         
         calendar_data = {
             "zh": [],
