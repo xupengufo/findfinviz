@@ -1728,27 +1728,52 @@ html[data-theme=dark] .segmented button.active {
     border-color: rgba(107, 114, 128, 0.2);
 }
 
-/* Tech Score Indicators (Color-coded) */
+/* Tech Score Indicators (Color-coded) - Light Mode Defaults */
 .tech-score-veryhigh {
+    background: rgba(16, 185, 129, 0.08) !important;
+    border: 1px solid rgba(16, 185, 129, 0.4) !important;
+    color: #065f46 !important;
+}
+
+.tech-score-high {
+    background: rgba(217, 119, 6, 0.08) !important;
+    border: 1px solid rgba(217, 119, 6, 0.4) !important;
+    color: #92400e !important;
+}
+
+.tech-score-normal {
+    background: rgba(107, 114, 128, 0.08) !important;
+    border: 1px solid rgba(107, 114, 128, 0.3) !important;
+    color: #374151 !important;
+}
+
+.tech-score-low {
+    background: rgba(239, 68, 68, 0.08) !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
+    color: #991b1b !important;
+}
+
+/* Dark Mode Overrides for Tech Score Indicators */
+html[data-theme=dark] .tech-score-veryhigh {
     background: rgba(16, 185, 129, 0.15) !important;
     border: 1px solid #10b981 !important;
     color: #34d399 !important;
     text-shadow: 0 0 4px rgba(16, 185, 129, 0.3);
 }
 
-.tech-score-high {
+html[data-theme=dark] .tech-score-high {
     background: rgba(245, 158, 11, 0.15) !important;
     border: 1px solid #d97706 !important;
     color: #fbbf24 !important;
 }
 
-.tech-score-normal {
+html[data-theme=dark] .tech-score-normal {
     background: rgba(107, 114, 128, 0.15) !important;
     border: 1px solid rgba(107, 114, 128, 0.5) !important;
     color: #d1d5db !important;
 }
 
-.tech-score-low {
+html[data-theme=dark] .tech-score-low {
     background: rgba(239, 68, 68, 0.15) !important;
     border: 1px solid #ef4444 !important;
     color: #f87171 !important;
