@@ -536,6 +536,11 @@ def get_confluences():
     earnings_after = cache.get("opps_earnings_after") or []
     most_active = cache.get("opps_most_active") or []
     top_losers = cache.get("opps_top_losers") or []
+    overbought = cache.get("opps_overbought") or []
+    wedge_up = cache.get("opps_wedge_up") or []
+    wedge_down = cache.get("opps_wedge_down") or []
+    top_gainers = cache.get("opps_top_gainers") or []
+    most_volatile = cache.get("opps_most_volatile") or []
     recent_insider_buying_signal = cache.get("opps_recent_insider_buying") or []
     
     insiders = cache.get("insiders_top_owner_trade") or []
@@ -544,6 +549,20 @@ def get_confluences():
     
     reddit = cache.get("reddit_sentiment") or []
     sectors = cache.get("sectors_performance") or []
+
+    def normalize_change_pct(val):
+        """Normalize Change value to a percentage float.
+        Handles both '5.00%' string and 0.05 decimal formats."""
+        if val is None or val == '':
+            return 0.0
+        try:
+            s = str(val).strip()
+            if '%' in s:
+                return float(s.replace('%', ''))
+            else:
+                return float(s) * 100
+        except:
+            return 0.0
 
     tickers_map = {}
 
@@ -579,7 +598,10 @@ def get_confluences():
                     "quality_compounder": False,
                     "analyst_upgrade": False,
                     "earnings_catalyst": False,
-                    "momentum_leader": False
+                    "momentum_leader": False,
+                    "analyst_downgrade": False,
+                    "overbought": False,
+                    "bearish_momentum": False
                 }
             }
         entry = tickers_map[t]
@@ -662,7 +684,7 @@ def get_confluences():
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["earnings_catalyst"] = True
 
-    for item in most_active + top_losers:
+    for item in most_active + top_gainers:
         ticker = item.get("Ticker")
         if ticker:
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
@@ -686,6 +708,42 @@ def get_confluences():
         if ticker:
             e = get_or_create_ticker(ticker, item.get("name"), "", "", "", "", "", "", "", "", None, None)
             e["Factors"]["reddit_popular"] = True
+
+    for item in top_losers:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["bearish_momentum"] = True
+
+    for item in wedge_up:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["breakout"] = True
+
+    for item in wedge_down:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["reversal"] = True
+
+    for item in overbought:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["overbought"] = True
+
+    for item in most_volatile:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["volume_spike"] = True
+
+    for item in downgrades:
+        ticker = item.get("Ticker")
+        if ticker:
+            e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
+            e["Factors"]["analyst_downgrade"] = True
 
     top_3_sectors = []
     try:
@@ -728,8 +786,13 @@ def get_confluences():
             e["Factors"]["strong_sector"] = True
             tech_dim += 5
             reasons.append("Strong Sector (处于今日强势板块)")
-            
-        tech_dim = min(tech_dim, 40)
+
+        # 超买与反转/回调策略矛盾时扣分
+        if e["Factors"]["overbought"] and (e["Factors"]["reversal"] or e["Factors"]["pullback"]):
+            tech_dim -= 10
+            reasons.append("⚠️ Overbought Risk (超买与反转/回调矛盾)")
+
+        tech_dim = max(min(tech_dim, 40), 0)
 
         # 2. Fundamentals & Corporate Insiders (Max 35)
         fund_dim = 0
@@ -745,8 +808,11 @@ def get_confluences():
         if e["Factors"]["earnings_catalyst"]:
             fund_dim += 5
             reasons.append("Earnings Catalyst (财报催化剂)")
-            
-        fund_dim = min(fund_dim, 35)
+        if e["Factors"]["analyst_downgrade"]:
+            fund_dim -= 10
+            reasons.append("⚠️ Analyst Downgrade (分析师评级下调)")
+
+        fund_dim = max(min(fund_dim, 35), 0)
 
         # 3. Market Sentiment & Flow (Max 25)
         sent_dim = 0
@@ -763,8 +829,11 @@ def get_confluences():
             else:
                 sent_dim += 5
                 reasons.append("High Short Float (高卖空比例)")
-                
-        sent_dim = min(sent_dim, 25)
+        if e["Factors"]["bearish_momentum"]:
+            sent_dim -= 5
+            reasons.append("⚠️ Bearish Momentum (近期跌幅居前)")
+
+        sent_dim = max(min(sent_dim, 25), 0)
 
         # Combined Score
         score = tech_dim + fund_dim + sent_dim
@@ -772,15 +841,24 @@ def get_confluences():
         # 计算纯技术面评分 TechScore
         tech_score = 0
         
-        # 1. 核心形态得分 (最高 35)
+        # 1. 核心形态得分 (最高 40) — 允许多形态叠加
+        pattern_score = 0
+        pattern_count = 0
         if e["Factors"]["breakout"]:
-            tech_score += 35
-        elif e["Factors"]["breakout_candidate"]:
-            tech_score += 30
-        elif e["Factors"]["pullback"]:
-            tech_score += 25
-        elif e["Factors"]["reversal"]:
-            tech_score += 25
+            pattern_score = max(pattern_score, 35)
+            pattern_count += 1
+        if e["Factors"]["breakout_candidate"]:
+            pattern_score = max(pattern_score, 30)
+            pattern_count += 1
+        if e["Factors"]["pullback"]:
+            pattern_score = max(pattern_score, 28)
+            pattern_count += 1
+        if e["Factors"]["reversal"]:
+            pattern_score = max(pattern_score, 25)
+            pattern_count += 1
+        if pattern_count >= 2:
+            pattern_score = min(pattern_score + 5, 40)
+        tech_score += min(pattern_score, 40)
             
         # 2. 成交量配合得分 (最高 25)
         try:
@@ -794,22 +872,37 @@ def get_confluences():
         except:
             pass
             
-        # 3. 价格动量配合得分 (最高 20)
+        # 3. 价格动量配合得分 (最高 20) — 反转策略适配
         try:
-            change_pct = float(str(e["Change"]).replace("%", "").strip())
-            if change_pct > 5.0:
-                tech_score += 20
-            elif change_pct > 2.0:
-                tech_score += 15
-            elif change_pct > 0:
-                tech_score += 10
+            change_pct = normalize_change_pct(e["Change"])
+            if e["Factors"]["reversal"]:
+                # 反转策略: 适度下跌是健康买入信号
+                if -5.0 <= change_pct <= -1.0:
+                    tech_score += 20
+                elif -10.0 <= change_pct < -5.0:
+                    tech_score += 15
+                elif change_pct > 0:
+                    tech_score += 10  # 已开始反弹
+            else:
+                if change_pct > 5.0:
+                    tech_score += 20
+                elif change_pct > 2.0:
+                    tech_score += 15
+                elif change_pct > 0:
+                    tech_score += 10
         except:
             pass
             
-        # 4. 趋势状态调整 (最高 20)
-        if e["Factors"]["volume_spike"]:
-            tech_score += 20
-            
+        # 4. 趋势环境调整 (最高 15)
+        trend_bonus = 0
+        if e["Sector"] in top_3_sectors:
+            trend_bonus += 10
+        if e["Factors"]["overbought"] and (e["Factors"]["reversal"] or e["Factors"]["pullback"]):
+            trend_bonus -= 5  # 超买与反转/回调矛盾
+        elif e["Factors"]["overbought"] and e["Factors"]["breakout"]:
+            trend_bonus += 5  # 超买确认突破强度
+        tech_score += max(min(trend_bonus, 15), 0)
+
         e["TechScore"] = min(tech_score, 100)
         e["Score"] = score
         e["ScoreBreakdown"] = {
@@ -819,7 +912,9 @@ def get_confluences():
         }
         e["Reasons"] = reasons
 
-        if e["Score"] >= 35:
+        # 至少需要 2 个维度有得分才算真正的多重共振
+        dims_with_score = sum([1 for d in [tech_dim, fund_dim, sent_dim] if d > 0])
+        if e["Score"] >= 40 and dims_with_score >= 2:
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)

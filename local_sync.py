@@ -151,7 +151,10 @@ def sync_opportunities():
         "high_short_interest": "high_short_interest",
         "pullback": "pullback",
         "breakout_candidate": "breakout_candidate",
-        "quality_compounder": "quality_compounder"
+        "quality_compounder": "quality_compounder",
+        "overbought": "Overbought",
+        "wedge_up": "Wedge Up",
+        "wedge_down": "Wedge Down"
     }
     
     for key, signal_name in signals.items():

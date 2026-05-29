@@ -671,6 +671,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const label = activeLang === 'zh' ? '主力关注' : 'Market Leader';
                 badges.push(`<span class="card-badge"><i data-lucide="bar-chart-2" style="width:10px;height:10px;"></i> ${label}</span>`);
             }
+            if (item['Factors']['analyst_downgrade']) {
+                const label = activeLang === 'zh' ? '⚠️ 分析师下调' : '⚠️ Downgrade';
+                badges.push(`<span class="card-badge card-badge-warning"><i data-lucide="trending-down" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['bearish_momentum']) {
+                const label = activeLang === 'zh' ? '⚠️ 跌幅居前' : '⚠️ Top Loser';
+                badges.push(`<span class="card-badge card-badge-warning"><i data-lucide="arrow-down" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
+            if (item['Factors']['overbought']) {
+                const label = activeLang === 'zh' ? '⚠️ 超买' : '⚠️ Overbought';
+                badges.push(`<span class="card-badge card-badge-warning"><i data-lucide="alert-triangle" style="width:10px;height:10px;"></i> ${label}</span>`);
+            }
         }
 
         if (badges.length === 0) return '';
