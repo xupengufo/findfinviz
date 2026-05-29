@@ -772,10 +772,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let scoreClass = '';
-            if (item['Score'] >= 80) {
+            if (item['Score'] >= 85) {
                 scoreClass = 'score-veryhigh';
-            } else if (item['Score'] >= 60) {
+            } else if (item['Score'] >= 75) {
                 scoreClass = 'score-high';
+            } else if (item['Score'] < 55) {
+                scoreClass = 'score-low';
             }
 
             let techScoreClass = 'tech-score-normal';
