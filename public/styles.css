@@ -1380,6 +1380,7 @@ html[data-theme=dark] .segmented button.active {
     text-transform: uppercase;
     margin-top: 3px;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .confluence-reasons-container {

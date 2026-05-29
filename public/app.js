@@ -814,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${volumeSparkHtml}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
                         <div class="tech-score-wrap">
                             <span class="tech-score-indicator ${techScoreClass}">${item['TechScore'] || 0}</span>
                             <span class="confluence-score-label">${activeLang === 'zh' ? '技术评分' : 'Tech Score'}</span>
