@@ -67,6 +67,8 @@ class FallbackCache:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
             )
@@ -438,72 +440,74 @@ def get_stock(ticker: str):
         if not stock.flag:
             raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found on FinViz.")
             
+        import concurrent.futures
+
+        scrapers = {
+            "fundament": stock.ticker_fundament,
+            "ratings_outer": stock.ticker_outer_ratings,
+            "news": stock.ticker_news,
+            "inside trader": stock.ticker_inside_trader,
+            "description": stock.ticker_description,
+            "peers": stock.ticker_peer,
+            "etfs": stock.ticker_etf_holders
+        }
+
         info = {}
-        try:
-            info["fundament"] = stock.ticker_fundament()
-        except Exception as fund_err:
-            print(f"Error fetching fundament for {ticker}: {fund_err}")
-            info["fundament"] = {}
-            
-        try:
-            info["ratings_outer"] = stock.ticker_outer_ratings()
-        except Exception as ratings_err:
-            print(f"Error fetching ratings for {ticker}: {ratings_err}")
-            info["ratings_outer"] = None
-            
-        try:
-            info["news"] = stock.ticker_news()
-        except Exception as news_err:
-            print(f"Error fetching news for {ticker}: {news_err}")
-            info["news"] = None
-            
-        try:
-            info["inside trader"] = stock.ticker_inside_trader()
-        except Exception as insider_err:
-            print(f"Error fetching insider trader for {ticker}: {insider_err}")
-            info["inside trader"] = None
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
+            future_to_key = {executor.submit(func): key for key, func in scrapers.items()}
+            for future in concurrent.futures.as_completed(future_to_key):
+                key = future_to_key[future]
+                try:
+                    info[key] = future.result()
+                except Exception as err:
+                    print(f"Error scraping {key} for {ticker}: {err}")
+                    if key == "fundament":
+                        info[key] = {}
+                    elif key in ["peers", "etfs"]:
+                        info[key] = []
+                    elif key == "description":
+                        info[key] = ""
+                    else:
+                        info[key] = None
         
         res_info = {
-            "fundament": info.get("fundament", {}),
-            "description": "",
-            "peers": [],
-            "etfs": [],
+            "fundament": info.get("fundament") or {},
+            "description": info.get("description") or "",
+            "peers": info.get("peers") or [],
+            "etfs": info.get("etfs") or [],
         }
         
-        try:
-            res_info["description"] = stock.ticker_description()
-        except Exception as desc_err:
-            print(f"Error fetching description for {ticker}: {desc_err}")
-            
-        try:
-            res_info["peers"] = stock.ticker_peer()
-        except Exception as peer_err:
-            print(f"Error fetching peers for {ticker}: {peer_err}")
-            
-        try:
-            res_info["etfs"] = stock.ticker_etf_holders()
-        except Exception as etf_err:
-            print(f"Error fetching etfs for {ticker}: {etf_err}")
-        
         if info.get("ratings_outer") is not None:
-            df_ratings = info["ratings_outer"].copy().fillna("")
-            if "Date" in df_ratings.columns:
-                df_ratings["Date"] = df_ratings["Date"].apply(lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x))
-            res_info["ratings_outer"] = df_ratings.to_dict(orient="records")
+            import pandas as pd
+            if isinstance(info["ratings_outer"], pd.DataFrame):
+                df_ratings = info["ratings_outer"].copy().fillna("")
+                if "Date" in df_ratings.columns:
+                    df_ratings["Date"] = df_ratings["Date"].apply(lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x))
+                res_info["ratings_outer"] = df_ratings.to_dict(orient="records")
+            else:
+                res_info["ratings_outer"] = []
         else:
             res_info["ratings_outer"] = []
             
         if info.get("news") is not None:
-            df_news = info["news"].copy().fillna("")
-            if "Date" in df_news.columns:
-                df_news["Date"] = df_news["Date"].apply(lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x))
-            res_info["news"] = df_news.to_dict(orient="records")
+            import pandas as pd
+            if isinstance(info["news"], pd.DataFrame):
+                df_news = info["news"].copy().fillna("")
+                if "Date" in df_news.columns:
+                    df_news["Date"] = df_news["Date"].apply(lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x))
+                res_info["news"] = df_news.to_dict(orient="records")
+            else:
+                res_info["news"] = []
         else:
             res_info["news"] = []
             
         if info.get("inside trader") is not None:
-            df_insider = info["inside trader"].copy().fillna("")
-            res_info["inside_trader"] = df_insider.to_dict(orient="records")
+            import pandas as pd
+            if isinstance(info["inside trader"], pd.DataFrame):
+                df_insider = info["inside trader"].copy().fillna("")
+                res_info["inside_trader"] = df_insider.to_dict(orient="records")
+            else:
+                res_info["inside_trader"] = []
         else:
             res_info["inside_trader"] = []
             
@@ -763,20 +767,18 @@ def get_confluences():
 
         # 1. Technical Structure (Max 40)
         tech_dim = 0
-        if e["Factors"]["reversal"] or e["Factors"]["pullback"]:
-            if e["Factors"]["reversal"]:
-                tech_dim += 30
-                reasons.append("Technical Reversal (超卖/底部构筑)")
-            if e["Factors"]["pullback"]:
-                tech_dim += 25
-                reasons.append("Trend Pullback (均线趋势回调)")
-        elif e["Factors"]["breakout"] or e["Factors"]["breakout_candidate"]:
-            if e["Factors"]["breakout"]:
-                tech_dim += 20
-                reasons.append("Technical Breakout (新高/突破构筑)")
-            if e["Factors"]["breakout_candidate"]:
-                tech_dim += 25
-                reasons.append("Breakout Candidate (放量临近历史高点)")
+        if e["Factors"]["reversal"]:
+            tech_dim += 30
+            reasons.append("Technical Reversal (超卖/底部构筑)")
+        if e["Factors"]["pullback"]:
+            tech_dim += 25
+            reasons.append("Trend Pullback (均线趋势回调)")
+        if e["Factors"]["breakout"]:
+            tech_dim += 20
+            reasons.append("Technical Breakout (新高/突破构筑)")
+        if e["Factors"]["breakout_candidate"]:
+            tech_dim += 25
+            reasons.append("Breakout Candidate (放量临近历史高点)")
         
         if e["Factors"]["volume_spike"]:
             tech_dim += 10

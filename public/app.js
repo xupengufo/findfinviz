@@ -1374,7 +1374,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Setup initial static FinViz Chart
         const chartImg = document.getElementById('modal-chart-img');
+        chartImg.style.opacity = '0';
+        chartImg.style.transition = 'opacity 0.2s ease-in-out';
         chartImg.src = `https://finviz.com/chart.ashx?t=${ticker}&ty=c&ta=1&p=d`;
+        chartImg.onload = () => {
+            chartImg.style.opacity = '1';
+        };
+        chartImg.onerror = () => {
+            chartImg.style.opacity = '1';
+        };
         document.getElementById('tv-link').href = `https://www.tradingview.com/symbols/${ticker}`;
 
         // Reset metrics

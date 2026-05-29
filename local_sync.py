@@ -67,6 +67,8 @@ else:
         import sqlite3
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
         cursor.execute(
             "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
         )
@@ -117,6 +119,8 @@ def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV fo
             db_path = get_db_path()
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
             cursor.execute(
                 "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
                 (key, val_str, expires_at)
