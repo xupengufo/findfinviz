@@ -25,12 +25,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeInsiderOption = 'top owner trade';
     let activeSortField = 'marketcap';
     let activeSortDirection = 'desc';
+    let activeMcapFilter = 'all';
+    let activeConfluenceMcapFilter = 'all';
     let currentOppsList = [];
     let currentInsiderList = [];
     let currentSectorsList = [];
     let currentRedditList = [];
     let currentConfluencesList = [];
     let currentWsbCalendar = null;
+    let watchlist = JSON.parse(localStorage.getItem('watchlist') || '{}');
     
     // API URL configuration (works for both local development and Vercel)
     const API_BASE = window.location.origin;
@@ -41,26 +44,116 @@ document.addEventListener('DOMContentLoaded', () => {
         confluences: false,
         insider: false,
         sectors: false,
-        reddit: false
+        reddit: false,
+        watchlist: false
     };
 
     // Cache for stock details to allow instant modal transitions
     const stockCache = {};
+
+    // Track last data update timestamp for freshness display
+    let lastDataUpdate = null;
 
     function updateTimestamp(payload) {
         const tsEl = document.getElementById('data-timestamp');
         if (tsEl && payload && payload.updated_at) {
             try {
                 const d = new Date(payload.updated_at);
+                lastDataUpdate = d;
                 const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
                 tsEl.textContent = timeStr;
+                updateFreshnessIndicator(d);
             } catch(e) {
                 tsEl.textContent = '';
             }
         }
     }
 
+    function updateFreshnessIndicator(updateTime) {
+        const chip = document.querySelector('.status-chip');
+        if (!chip || !updateTime) return;
+        const ageMs = Date.now() - updateTime.getTime();
+        const ageMin = Math.floor(ageMs / 60000);
+        
+        if (ageMin < 30) {
+            chip.className = 'status-chip status-chip-positive';
+        } else if (ageMin < 120) {
+            chip.className = 'status-chip status-chip-warning';
+        } else {
+            chip.className = 'status-chip status-chip-stale';
+        }
+    }
+
     // Translations Dictionary
+    // Shared sector name mapping (used across loadSectors, renderSectors, openModal, getSectorZhName)
+    const sectorZhMapping = {
+        'Technology': '科技',
+        'Financial': '金融',
+        'Healthcare': '医疗保健',
+        'Consumer Cyclical': '周期性消费',
+        'Industrials': '工业',
+        'Communication Services': '通讯服务',
+        'Consumer Defensive': '防御性消费',
+        'Energy': '能源',
+        'Real Estate': '房地产',
+        'Basic Materials': '基础材料',
+        'Utilities': '公用事业'
+    };
+
+    // Confluence reason key translations
+    const reasonTranslations = {
+        en: {
+            reason_reversal: "Technical Reversal (Oversold/Double Bottom)",
+            reason_pullback: "Trend Pullback (SMA Support)",
+            reason_breakout: "Technical Breakout (New High/Wedge)",
+            reason_breakout_candidate: "Breakout Candidate (High Volume Near ATH)",
+            reason_volume_spike: "Unusual Volume (Institutional Activity)",
+            reason_high_volatility: "High Volatility",
+            reason_strong_sector: "Strong Sector (Today's Top Performer)",
+            reason_insider_buying: "Insider Buying (Executive Net Purchase)",
+            reason_quality_compounder: "Quality Compounder (High ROE, Low Debt)",
+            reason_analyst_upgrade: "Analyst Upgrade",
+            reason_earnings_catalyst: "Earnings Catalyst",
+            reason_analyst_downgrade: "⚠️ Analyst Downgrade",
+            reason_momentum_leader: "Market Leader (Institutional Focus)",
+            reason_reddit_popular: "Reddit Popular (Retail Buzz)",
+            reason_squeeze_play: "Squeeze Play (High Short + Attention)",
+            reason_high_short_float: "High Short Float",
+            reason_bearish_momentum: "⚠️ Bearish Momentum (Top Loser)",
+            conflict_overbought_reversal: "⚠️ Overbought vs Reversal/Pullback conflict",
+            conflict_overbought_breakout: "⚠️ Breakout + Overbought — high chase risk",
+            conflict_reversal_bearish: "⚠️ Reversal vs Bearish Momentum — possible continuation",
+            conflict_quality_downgrade: "⚠️ Quality stock downgraded — check fundamentals"
+        },
+        zh: {
+            reason_reversal: "技术面反转 (超卖/双底构筑)",
+            reason_pullback: "趋势回调 (均线支撑)",
+            reason_breakout: "技术面突破 (新高/楔形)",
+            reason_breakout_candidate: "突破候选 (放量临近历史高点)",
+            reason_volume_spike: "异常放量 (主力异动)",
+            reason_high_volatility: "高波动率",
+            reason_strong_sector: "强势板块 (今日领涨板块)",
+            reason_insider_buying: "高管增持 (内部人净买入)",
+            reason_quality_compounder: "优质复利 (高ROE低负债)",
+            reason_analyst_upgrade: "分析师上调评级",
+            reason_earnings_catalyst: "财报催化剂",
+            reason_analyst_downgrade: "⚠️ 分析师下调评级",
+            reason_momentum_leader: "主力关注 (市场焦点)",
+            reason_reddit_popular: "散户热议 (Reddit 高讨论度)",
+            reason_squeeze_play: "逼空机会 (高空头比+关注度)",
+            reason_high_short_float: "高卖空比例",
+            reason_bearish_momentum: "⚠️ 跌幅居前 (空头势头)",
+            conflict_overbought_reversal: "⚠️ 超买 vs 反转/回调 — 信号矛盾",
+            conflict_overbought_breakout: "⚠️ 突破+超买 — 高追风险",
+            conflict_reversal_bearish: "⚠️ 反转 vs 持续下跌 — 可能是下跌中继",
+            conflict_quality_downgrade: "⚠️ 绩优股被下调 — 需确认基本面"
+        }
+    };
+
+    function translateReason(key) {
+        return (reasonTranslations[activeLang] || reasonTranslations.en)[key] || key;
+    }
+
     const translations = {
         en: {
             tab_opps: "Opportunities",
@@ -106,6 +199,12 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_pe: "P/E Ratio",
             modal_sfloat: "Short Float",
             modal_rsi: "RSI (14)",
+            modal_roe: "ROE",
+            modal_debt_eq: "Debt/Equity",
+            modal_dividend: "Dividend Yield",
+            modal_peg: "PEG Ratio",
+            modal_profit_margin: "Profit Margin",
+            modal_target_price: "Target Price",
             modal_price: "Price",
             modal_change: "Change",
             modal_profile: "Company Profile",
@@ -118,6 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
             sort_change: "Change",
             sort_price: "Price",
             sort_ticker: "Ticker",
+            mcap_all: "All Caps",
+            mcap_large: "Large (>$10B)",
+            mcap_mid: "Mid ($2B-$10B)",
+            mcap_small: "Small ($300M-$2B)",
+            mcap_micro: "Micro (<$300M)",
             
             // Dynamic content
             loading_opps: "Loading opportunities...",
@@ -176,7 +280,18 @@ document.addEventListener('DOMContentLoaded', () => {
             th_calendar_event: "Event",
             th_calendar_focus: "Community Focus",
             loading_wsb_calendar: "Loading WSB Important Events Calendar...",
-            err_wsb_calendar: "Error: Failed to load WSB Important Events Calendar."
+            err_wsb_calendar: "Error: Failed to load WSB Important Events Calendar.",
+            data_fresh: "Fresh",
+            data_stale: "Stale",
+            data_age_min: "m ago",
+            data_age_hour: "h ago",
+            refresh_btn: "Refresh",
+            tab_watchlist: "My Picks",
+            watchlist_title: "My Watchlist",
+            watchlist_subtitle: "Your saved stocks for tracking. Data stored locally in your browser.",
+            watchlist_empty: "No stocks saved yet. Click the ★ button on any stock card to add it here.",
+            watchlist_remove: "Remove",
+            watchlist_note_placeholder: "Add a note..."
         },
         zh: {
             tab_opps: "技术选股",
@@ -222,6 +337,12 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_pe: "市盈率 P/E",
             modal_sfloat: "空头占比",
             modal_rsi: "RSI 指标 (14)",
+            modal_roe: "净资产收益率 ROE",
+            modal_debt_eq: "资产负债率 Debt/Eq",
+            modal_dividend: "股息率 Dividend",
+            modal_peg: "PEG 指标",
+            modal_profit_margin: "净利率 Profit Margin",
+            modal_target_price: "目标价 Target Price",
             modal_price: "当前价",
             modal_change: "今日变动",
             modal_profile: "公司简介",
@@ -234,6 +355,11 @@ document.addEventListener('DOMContentLoaded', () => {
             sort_change: "涨跌排行",
             sort_price: "股价排行",
             sort_ticker: "代码首字母",
+            mcap_all: "全部市值",
+            mcap_large: "大盘 (>$100亿)",
+            mcap_mid: "中盘 ($20亿-$100亿)",
+            mcap_small: "小盘 ($3亿-$20亿)",
+            mcap_micro: "微盘 (<$3亿)",
             
             // Dynamic content
             loading_opps: "正在加载选股列表...",
@@ -253,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modal_no_desc: "暂无公司简介数据。",
             modal_no_peers: "暂无同业股票推荐。",
             modal_no_etfs: "暂无持股 ETF 记录。",
-            modal_loading_news: "正在加载新闻报道...",
+            modal_loading_news: "正在加载新闻报道。",
             modal_no_news: "暂无相关新闻报道。",
             modal_err_company: "加载公司数据错误",
             modal_err_desc: "无法从接口下载公司简介描述。",
@@ -292,7 +418,18 @@ document.addEventListener('DOMContentLoaded', () => {
             th_calendar_event: "事件",
             th_calendar_focus: "社区关注点",
             loading_wsb_calendar: "正在加载 WSB 重要事件日历...",
-            err_wsb_calendar: "错误：无法加载 WSB 重要事件日历。"
+            err_wsb_calendar: "错误：无法加载 WSB 重要事件日历。",
+            data_fresh: "实时",
+            data_stale: "可能过期",
+            data_age_min: "分钟前",
+            data_age_hour: "小时前",
+            refresh_btn: "刷新",
+            tab_watchlist: "自选股",
+            watchlist_title: "我的自选股",
+            watchlist_subtitle: "您收藏的关注标的。数据存储在本地浏览器中。",
+            watchlist_empty: "暂无收藏。点击任意股票卡片上的 ★ 按钮即可添加。",
+            watchlist_remove: "移除",
+            watchlist_note_placeholder: "添加备注..."
         }
     };
 
@@ -334,6 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderWsbCalendar(currentWsbCalendar);
             }
         }
+        if (tabLoaded.watchlist) renderWatchlist();
 
         // Reload TradingView widget if modal is open and TradingView chart is active
         const modal = document.getElementById('ticker-modal');
@@ -480,6 +618,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadSectors();
                 } else if (activeTab === 'reddit') {
                     loadReddit();
+                } else if (activeTab === 'watchlist') {
+                    renderWatchlist();
+                    tabLoaded.watchlist = true;
                 }
             });
         });
@@ -545,6 +686,28 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        // Market Cap Filter selectors for Opportunities
+        const mcapButtonsAll = document.querySelectorAll('.mcap-filter-btn:not([data-context])');
+        mcapButtonsAll.forEach(btn => {
+            btn.addEventListener('click', () => {
+                mcapButtonsAll.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeMcapFilter = btn.getAttribute('data-mcap');
+                renderOpportunities(currentOppsList);
+            });
+        });
+
+        // Market Cap Filter selectors for Confluences
+        const mcapConfButtons = document.querySelectorAll('.mcap-filter-btn[data-context="confluences"]');
+        mcapConfButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                mcapConfButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeConfluenceMcapFilter = btn.getAttribute('data-mcap');
+                renderConfluences(currentConfluencesList);
+            });
+        });
+
         // Close Modal events
         document.querySelector('.close-modal-btn').addEventListener('click', closeModal);
         document.getElementById('ticker-modal').addEventListener('click', (e) => {
@@ -581,6 +744,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('tradingview-chart-container').style.display = 'block';
                 const currentTicker = document.getElementById('modal-ticker').innerText;
                 loadTradingViewWidget(currentTicker);
+            });
+        }
+
+        // Refresh button event listener
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                const icon = refreshBtn.querySelector('i');
+                if (icon) icon.classList.add('spin-animation');
+                
+                try {
+                    let key = localStorage.getItem('sync_api_key') || '';
+                    let url = `/api/sync`;
+                    if (key) {
+                        url += `?api_key=${encodeURIComponent(key)}`;
+                    }
+                    
+                    let res = await fetch(url);
+                    if (res.status === 401) {
+                        const newKey = prompt(activeLang === 'zh' ? '请输入同步 API Key:' : 'Please enter Sync API Key:');
+                        if (newKey) {
+                            localStorage.setItem('sync_api_key', newKey);
+                            url = `/api/sync?api_key=${encodeURIComponent(newKey)}`;
+                            res = await fetch(url);
+                        } else {
+                            if (icon) icon.classList.remove('spin-animation');
+                            return;
+                        }
+                    }
+                    
+                    if (res.ok) {
+                        alert(activeLang === 'zh' ? '同步任务已在后台启动，数据将在 1-2 分钟内更新！' : 'Sync task triggered in the background! Data will update in 1-2 minutes.');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        const err = await res.json();
+                        alert((activeLang === 'zh' ? '同步失败: ' : 'Sync failed: ') + (err.detail || 'Unknown error'));
+                    }
+                } catch(e) {
+                    alert((activeLang === 'zh' ? '请求失败: ' : 'Request failed: ') + e.message);
+                } finally {
+                    if (icon) icon.classList.remove('spin-animation');
+                }
             });
         }
     }
@@ -726,13 +933,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const grid = document.getElementById('confluences-grid');
         grid.innerHTML = '';
         
-        if (!list || list.length === 0) {
+        const filteredList = filterByMarketCap(list, activeConfluenceMcapFilter);
+        if (!filteredList || filteredList.length === 0) {
             grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_confluences}</div>`;
             lucide.createIcons();
             return;
         }
 
-        list.forEach(item => {
+        filteredList.forEach(item => {
             const card = document.createElement('div');
             card.className = 'opp-card';
 
@@ -790,13 +998,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let reasonsHtml = '';
-            if (item['Reasons'] && item['Reasons'].length > 0) {
-                const tags = item['Reasons'].map(r => `<span class="confluence-reason-tag">${escapeHtml(r)}</span>`).join('');
+            const allReasons = (item['Reasons'] || []).map(r => translateReason(r));
+            const conflicts = (item['Conflicts'] || []).map(r => translateReason(r));
+            
+            if (allReasons.length > 0 || conflicts.length > 0) {
+                const reasonTags = allReasons.map(r => `<span class="confluence-reason-tag">${escapeHtml(r)}</span>`).join('');
+                const conflictTags = conflicts.map(r => `<span class="confluence-reason-tag conflict-tag">${escapeHtml(r)}</span>`).join('');
                 reasonsHtml = `
                     <div class="confluence-reasons-container">
                         <span class="confluence-reason-title">${activeLang === 'zh' ? '共振因子' : 'Confluence Factors'}</span>
                         <div class="confluence-reason-tags">
-                            ${tags}
+                            ${reasonTags}${conflictTags}
                         </div>
                     </div>
                 `;
@@ -808,6 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="confluence-header">
                     <div>
                         <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
+                        <button class="watchlist-star-btn ${isInWatchlist(item['Ticker']) ? 'active' : ''}" data-ticker="${escapeHtml(item['Ticker'])}" title="Add to watchlist" style="margin-left: 6px;"><i data-lucide="star" style="width:12px;height:12px;"></i></button>
                         <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
                         <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
                             ${dominantPattern ? `<span class="pattern-badge ${patternClass}">${dominantPattern}</span>` : ''}
@@ -892,13 +1105,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const grid = document.getElementById('opps-grid');
         grid.innerHTML = '';
         
-        if (!list || list.length === 0) {
+        const filteredList = filterByMarketCap(list, activeMcapFilter);
+        if (!filteredList || filteredList.length === 0) {
             grid.innerHTML = `<div class="no-data"><i data-lucide="info"></i> ${translations[activeLang].no_opps}</div>`;
             lucide.createIcons();
             return;
         }
         
-        const sortedList = sortData(list, activeSortField, activeSortDirection);
+        const sortedList = sortData(filteredList, activeSortField, activeSortDirection);
 
         sortedList.forEach(item => {
             const card = document.createElement('div');
@@ -911,7 +1125,12 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
-                    <span class="card-change ${changeClass}">${changeText}</span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="watchlist-star-btn ${isInWatchlist(item['Ticker']) ? 'active' : ''}" data-ticker="${escapeHtml(item['Ticker'])}" title="Add to watchlist">
+                            <i data-lucide="star" style="width:14px;height:14px;"></i>
+                        </button>
+                        <span class="card-change ${changeClass}">${changeText}</span>
+                    </div>
                 </div>
                 <div class="card-company">${escapeHtml(item['Company']) || '-'}</div>
                 ${badgesHtml}
@@ -939,6 +1158,14 @@ document.addEventListener('DOMContentLoaded', () => {
             card.addEventListener('click', () => {
                 openModal(item['Ticker']);
             });
+
+            const starBtn = card.querySelector('.watchlist-star-btn');
+            if (starBtn) {
+                starBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleWatchlist(item['Ticker'], item['Company'], item['Sector'], item['Industry']);
+                });
+            }
             grid.appendChild(card);
         });
 
@@ -1059,20 +1286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const getSectorName = (name) => {
                 if (activeLang === 'zh') {
-                    const sectorMapping = {
-                        'Technology': '科技',
-                        'Financial': '金融',
-                        'Healthcare': '医疗保健',
-                        'Consumer Cyclical': '周期性消费',
-                        'Industrials': '工业',
-                        'Communication Services': '通讯服务',
-                        'Consumer Defensive': '防御性消费',
-                        'Energy': '能源',
-                        'Real Estate': '房地产',
-                        'Basic Materials': '基础材料',
-                        'Utilities': '公用事业'
-                    };
-                    return sectorMapping[name] || name;
+                    return sectorZhMapping[name] || name;
                 }
                 return name;
             };
@@ -1127,20 +1341,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const getSectorName = (name) => {
             if (activeLang === 'zh') {
-                const sectorMapping = {
-                    'Technology': '科技',
-                    'Financial': '金融',
-                    'Healthcare': '医疗保健',
-                    'Consumer Cyclical': '周期性消费',
-                    'Industrials': '工业',
-                    'Communication Services': '通讯服务',
-                    'Consumer Defensive': '防御性消费',
-                    'Energy': '能源',
-                    'Real Estate': '房地产',
-                    'Basic Materials': '基础材料',
-                    'Utilities': '公用事业'
-                };
-                return sectorMapping[name] || name;
+                return sectorZhMapping[name] || name;
             }
             return name;
         };
@@ -1229,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('reddit-table-body');
         tbody.innerHTML = '';
         if (!list || list.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No data found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">${activeLang === 'zh' ? '暂无数据。' : 'No data found.'}</td></tr>`;
             return;
         }
 
@@ -1286,6 +1487,119 @@ document.addEventListener('DOMContentLoaded', () => {
                 openModal(ticker);
             });
             tbody.appendChild(tr);
+        });
+
+        lucide.createIcons();
+    }
+
+    // Watchlist Management
+    function toggleWatchlist(ticker, company, sector, industry) {
+        ticker = ticker.toUpperCase();
+        if (watchlist[ticker]) {
+            delete watchlist[ticker];
+        } else {
+            watchlist[ticker] = {
+                company: company || '',
+                sector: sector || '',
+                industry: industry || '',
+                note: '',
+                addedAt: new Date().toISOString()
+            };
+        }
+        localStorage.setItem('watchlist', JSON.stringify(watchlist));
+        // Update star icons on visible cards
+        document.querySelectorAll('.watchlist-star-btn').forEach(btn => {
+            const btnTicker = btn.getAttribute('data-ticker');
+            if (btnTicker === ticker) {
+                btn.classList.toggle('active', !!watchlist[ticker]);
+            }
+        });
+        // Re-render watchlist tab if it was loaded
+        if (tabLoaded.watchlist) renderWatchlist();
+    }
+
+    function isInWatchlist(ticker) {
+        return !!watchlist[ticker.toUpperCase()];
+    }
+
+    function updateWatchlistNote(ticker, note) {
+        ticker = ticker.toUpperCase();
+        if (watchlist[ticker]) {
+            watchlist[ticker].note = note;
+            localStorage.setItem('watchlist', JSON.stringify(watchlist));
+        }
+    }
+
+    function renderWatchlist() {
+        const grid = document.getElementById('watchlist-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        const tickers = Object.keys(watchlist);
+        if (tickers.length === 0) {
+            grid.innerHTML = `<div class="no-data"><i data-lucide="star"></i> ${translations[activeLang].watchlist_empty}</div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        tickers.forEach(ticker => {
+            const info = watchlist[ticker];
+            const card = document.createElement('div');
+            card.className = 'opp-card watchlist-card';
+
+            const addedDate = info.addedAt ? new Date(info.addedAt).toLocaleDateString() : '';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="card-ticker">${escapeHtml(ticker)}</span>
+                    <button class="watchlist-remove-btn" data-ticker="${escapeHtml(ticker)}" title="${translations[activeLang].watchlist_remove}">
+                        <i data-lucide="x" style="width:14px;height:14px;"></i>
+                    </button>
+                </div>
+                <div class="card-company">${escapeHtml(info.company || '-')}</div>
+                <div class="card-footer" style="margin-top: 6px;">
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '板块' : 'Sector'}</span>
+                        <span class="item-value">${escapeHtml(info.sector || '-')}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '行业' : 'Industry'}</span>
+                        <span class="item-value">${escapeHtml(info.industry || '-')}</span>
+                    </div>
+                    <div class="card-footer-item">
+                        <span class="item-label">${activeLang === 'zh' ? '添加日期' : 'Added'}</span>
+                        <span class="item-value">${addedDate}</span>
+                    </div>
+                </div>
+                <div class="watchlist-note-wrap">
+                    <input type="text" class="watchlist-note-input" 
+                        placeholder="${translations[activeLang].watchlist_note_placeholder}" 
+                        value="${escapeHtml(info.note || '')}" 
+                        data-ticker="${escapeHtml(ticker)}">
+                </div>
+            `;
+
+            // Click card to open modal (but not when clicking remove or note input)
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.watchlist-remove-btn') || e.target.closest('.watchlist-note-input')) return;
+                openModal(ticker);
+            });
+
+            // Remove button
+            const removeBtn = card.querySelector('.watchlist-remove-btn');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleWatchlist(ticker);
+            });
+
+            // Note input
+            const noteInput = card.querySelector('.watchlist-note-input');
+            noteInput.addEventListener('click', (e) => e.stopPropagation());
+            noteInput.addEventListener('change', (e) => {
+                updateWatchlistNote(ticker, e.target.value);
+            });
+
+            grid.appendChild(card);
         });
 
         lucide.createIcons();
@@ -1452,20 +1766,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let sectorVal = f['Sector'] || '-';
             let industryVal = f['Industry'] || '-';
             if (activeLang === 'zh') {
-                const sectorMapping = {
-                    'Technology': '科技',
-                    'Financial': '金融',
-                    'Healthcare': '医疗保健',
-                    'Consumer Cyclical': '周期性消费',
-                    'Industrials': '工业',
-                    'Communication Services': '通讯服务',
-                    'Consumer Defensive': '防御性消费',
-                    'Energy': '能源',
-                    'Real Estate': '房地产',
-                    'Basic Materials': '基础材料',
-                    'Utilities': '公用事业'
-                };
-                sectorVal = sectorMapping[sectorVal] || sectorVal;
+                sectorVal = sectorZhMapping[sectorVal] || sectorVal;
             }
             
             document.getElementById('modal-sector').innerText = sectorVal;
@@ -1477,6 +1778,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('m-pe').innerText = f['P/E'] || '-';
             document.getElementById('m-sfloat').innerText = f['Short Float'] || '-';
             document.getElementById('m-rsi').innerText = f['RSI (14)'] || '-';
+            document.getElementById('m-roe').innerText = f['ROE'] || '-';
+            document.getElementById('m-debteq').innerText = f['Debt/Eq'] || '-';
+            document.getElementById('m-dividend').innerText = f['Dividend TTM'] || f['Dividend Est.'] || '-';
+            document.getElementById('m-peg').innerText = f['PEG'] || '-';
+            document.getElementById('m-profitmargin').innerText = f['Profit Margin'] || '-';
+            document.getElementById('m-targetprice').innerText = f['Target Price'] || '-';
             document.getElementById('m-price').innerText = f['Price'] || '-';
             
             const { formatted: changeText, isBullish } = parseChange(f['Change']);
@@ -1555,6 +1862,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('ticker-modal').classList.remove('active');
     }
 
+    // Escape key to close modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            const sectorModal = document.getElementById('sector-modal');
+            if (sectorModal) sectorModal.classList.remove('active');
+        }
+    });
+
     // 5. Utility Helper Functions
     function formatNumber(num) {
         if (!num || isNaN(num)) return num;
@@ -1591,6 +1907,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
         }
+    }
+
+    function filterByMarketCap(list, filter) {
+        if (filter === 'all') return list;
+        return list.filter(item => {
+            const mcap = parseFloat(item['Market Cap']);
+            if (isNaN(mcap)) return false;
+            switch (filter) {
+                case 'large': return mcap >= 10e9;
+                case 'mid': return mcap >= 2e9 && mcap < 10e9;
+                case 'small': return mcap >= 300e6 && mcap < 2e9;
+                case 'micro': return mcap < 300e6;
+                default: return true;
+            }
+        });
     }
 
     function sortData(list, field, direction) {
@@ -1661,20 +1992,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getSectorZhName(name) {
-        const sectorMapping = {
-            'Technology': '科技',
-            'Financial': '金融',
-            'Healthcare': '医疗保健',
-            'Consumer Cyclical': '周期性消费',
-            'Industrials': '工业',
-            'Communication Services': '通讯服务',
-            'Consumer Defensive': '防御性消费',
-            'Energy': '能源',
-            'Real Estate': '房地产',
-            'Basic Materials': '基础材料',
-            'Utilities': '公用事业'
-        };
-        return sectorMapping[name] || name;
+        return sectorZhMapping[name] || name;
     }
 
     async function openSectorModal(sectorName) {

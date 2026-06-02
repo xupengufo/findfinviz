@@ -39,6 +39,9 @@
                         <button class="nav-btn" data-tab="reddit">
                             <i data-lucide="message-square"></i> <span data-i18n="tab_reddit">Reddit Sentiment</span>
                         </button>
+                        <button class="nav-btn" data-tab="watchlist">
+                            <i data-lucide="star"></i> <span data-i18n="tab_watchlist">My Picks</span>
+                        </button>
                     </div>
                 </nav>
 
@@ -48,6 +51,9 @@
                 </div>
 
                 <div class="page-nav-right">
+                    <button id="refresh-btn" class="plain-button" title="Refresh Data" style="margin-right: -4px;">
+                        <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                    </button>
                     <div class="status-chip status-chip-positive">
                         <span class="status-pulse-dot"></span>
                         <span class="status-text" data-i18n="live_cache">Live Cache</span>
@@ -75,6 +81,24 @@
                     </div>
                     <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" data-i18n="confluences_subtitle">
                         Stocks aligning technical reversals/breakouts, institutional volume, insider buying, and retail sentiment.
+                    </div>
+                    <!-- Market Cap Filter -->
+                    <div class="mcap-filter-selector segmented" style="margin-top: 8px; align-self: flex-start;">
+                        <button class="mcap-filter-btn active" data-mcap="all" data-context="confluences">
+                            <span data-i18n="mcap_all">All Caps</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="large" data-context="confluences">
+                            <span data-i18n="mcap_large">Large (&gt;$10B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="mid" data-context="confluences">
+                            <span data-i18n="mcap_mid">Mid ($2B-$10B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="small" data-context="confluences">
+                            <span data-i18n="mcap_small">Small ($300M-$2B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="micro" data-context="confluences">
+                            <span data-i18n="mcap_micro">Micro (&lt;$300M)</span>
+                        </button>
                     </div>
                 </div>
                 
@@ -129,6 +153,24 @@
                         <button class="sort-btn" data-sort="ticker">
                             <span data-i18n="sort_ticker">Ticker</span>
                             <span class="sort-icon-wrap"><i data-lucide="arrow-down-narrow-wide"></i></span>
+                        </button>
+                    </div>
+                    <!-- Market Cap Filter -->
+                    <div class="mcap-filter-selector segmented" style="margin-top: 4px; align-self: flex-start;">
+                        <button class="mcap-filter-btn active" data-mcap="all">
+                            <span data-i18n="mcap_all">All Caps</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="large">
+                            <span data-i18n="mcap_large">Large (&gt;$10B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="mid">
+                            <span data-i18n="mcap_mid">Mid ($2B-$10B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="small">
+                            <span data-i18n="mcap_small">Small ($300M-$2B)</span>
+                        </button>
+                        <button class="mcap-filter-btn" data-mcap="micro">
+                            <span data-i18n="mcap_micro">Micro (&lt;$300M)</span>
                         </button>
                     </div>
                 </div>
@@ -252,6 +294,22 @@
                     </table>
                 </div>
             </section>
+
+            <!-- Watchlist Tab -->
+            <section id="watchlist-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="star"></i>
+                        <h2 data-i18n="watchlist_title">My Watchlist</h2>
+                    </div>
+                    <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" data-i18n="watchlist_subtitle">
+                        Your saved stocks for tracking. Data stored locally in your browser.
+                    </div>
+                </div>
+                <div id="watchlist-grid" class="cards-grid">
+                    <!-- Dynamic content -->
+                </div>
+            </section>
         </main>
     </div>
 
@@ -289,6 +347,30 @@
                         <div class="metric-card">
                             <span class="m-label" data-i18n="modal_rsi">RSI (14)</span>
                             <span class="m-value font-data" id="m-rsi">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_roe">ROE</span>
+                            <span class="m-value font-data" id="m-roe">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_debt_eq">Debt/Equity</span>
+                            <span class="m-value font-data" id="m-debteq">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_dividend">Dividend Yield</span>
+                            <span class="m-value font-data" id="m-dividend">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_peg">PEG Ratio</span>
+                            <span class="m-value font-data" id="m-peg">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_profit_margin">Profit Margin</span>
+                            <span class="m-value font-data" id="m-profitmargin">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_target_price">Target Price</span>
+                            <span class="m-value font-data" id="m-targetprice">-</span>
                         </div>
                         <div class="metric-card">
                             <span class="m-label" data-i18n="modal_price">Price</span>

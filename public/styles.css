@@ -1780,4 +1780,40 @@ html[data-theme=dark] .tech-score-low {
     color: #f87171 !important;
 }
 
+/* ===== Market Cap Filter ===== */
+.mcap-filter-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.mcap-filter-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+.mcap-filter-btn:hover {
+    border-color: var(--brand-gold);
+    color: var(--text-primary);
+}
+.mcap-filter-btn.active {
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    color: #1a1a2e;
+    font-weight: 600;
+}
 
+/* ===== Spin Animation for Refresh Button ===== */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spin-animation {
+    animation: spin 1s linear infinite;
+}

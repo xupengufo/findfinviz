@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import sqlite3
+import concurrent.futures
 from datetime import datetime, timezone
 import requests
 import pandas as pd
@@ -65,15 +66,14 @@ class FallbackCache:
                 self.is_redis = False
                 
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL;")
-            cursor.execute("PRAGMA synchronous=NORMAL;")
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
-            )
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL;")
+                cursor.execute("PRAGMA synchronous=NORMAL;")
+                cursor.execute(
+                    "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
+                )
+                conn.commit()
             self.cleanup_expired()
         except Exception as e:
             print("Failed to initialize SQLite cache:", e)
@@ -81,12 +81,11 @@ class FallbackCache:
     def cleanup_expired(self):
         if not self.is_redis:
             try:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                now = int(datetime.now(timezone.utc).timestamp())
-                cursor.execute("DELETE FROM cache WHERE expires_at < ?", (now,))
-                conn.commit()
-                conn.close()
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    now = int(datetime.now(timezone.utc).timestamp())
+                    cursor.execute("DELETE FROM cache WHERE expires_at < ?", (now,))
+                    conn.commit()
             except Exception as e:
                 print("Failed to clean up expired SQLite cache:", e)
 
@@ -440,8 +439,6 @@ def get_stock(ticker: str):
         if not stock.flag:
             raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found on FinViz.")
             
-        import concurrent.futures
-
         scrapers = {
             "fundament": stock.ticker_fundament,
             "ratings_outer": stock.ticker_outer_ratings,
@@ -478,7 +475,6 @@ def get_stock(ticker: str):
         }
         
         if info.get("ratings_outer") is not None:
-            import pandas as pd
             if isinstance(info["ratings_outer"], pd.DataFrame):
                 df_ratings = info["ratings_outer"].copy().fillna("")
                 if "Date" in df_ratings.columns:
@@ -490,7 +486,6 @@ def get_stock(ticker: str):
             res_info["ratings_outer"] = []
             
         if info.get("news") is not None:
-            import pandas as pd
             if isinstance(info["news"], pd.DataFrame):
                 df_news = info["news"].copy().fillna("")
                 if "Date" in df_news.columns:
@@ -502,7 +497,6 @@ def get_stock(ticker: str):
             res_info["news"] = []
             
         if info.get("inside trader") is not None:
-            import pandas as pd
             if isinstance(info["inside trader"], pd.DataFrame):
                 df_insider = info["inside trader"].copy().fillna("")
                 res_info["inside_trader"] = df_insider.to_dict(orient="records")
@@ -589,10 +583,12 @@ def get_confluences():
                 "Score": 0,
                 "TechScore": 0,
                 "Reasons": [],
+                "Conflicts": [],
                 "Factors": {
                     "reversal": False,
                     "breakout": False,
                     "volume_spike": False,
+                    "high_volatility": False,
                     "short_squeeze": False,
                     "insider_buying": False,
                     "reddit_popular": False,
@@ -725,11 +721,12 @@ def get_confluences():
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["breakout"] = True
 
+    # Wedge Down is a bullish continuation pattern, classified as breakout
     for item in wedge_down:
         ticker = item.get("Ticker")
         if ticker:
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
-            e["Factors"]["reversal"] = True
+            e["Factors"]["breakout"] = True
 
     for item in overbought:
         ticker = item.get("Ticker")
@@ -737,11 +734,12 @@ def get_confluences():
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
             e["Factors"]["overbought"] = True
 
+    # Most Volatile is a volatility signal, not volume; track separately
     for item in most_volatile:
         ticker = item.get("Ticker")
         if ticker:
             e = get_or_create_ticker(ticker, item.get("Company"), item.get("Sector"), item.get("Industry"), item.get("Price"), item.get("Change"), item.get("Market Cap"), item.get("P/E"), item.get("Short Float"), item.get("Rel Volume"), item.get("ROE"), item.get("Debt/Eq"))
-            e["Factors"]["volume_spike"] = True
+            e["Factors"]["high_volatility"] = True
 
     for item in downgrades:
         ticker = item.get("Ticker")
@@ -764,35 +762,48 @@ def get_confluences():
     res_list = []
     for ticker, e in tickers_map.items():
         reasons = []
+        conflicts = []
 
         # 1. Technical Structure (Max 40)
         tech_dim = 0
         if e["Factors"]["reversal"]:
             tech_dim += 30
-            reasons.append("Technical Reversal (超卖/底部构筑)")
+            reasons.append("reason_reversal")
         if e["Factors"]["pullback"]:
             tech_dim += 25
-            reasons.append("Trend Pullback (均线趋势回调)")
+            reasons.append("reason_pullback")
         if e["Factors"]["breakout"]:
             tech_dim += 20
-            reasons.append("Technical Breakout (新高/突破构筑)")
+            reasons.append("reason_breakout")
         if e["Factors"]["breakout_candidate"]:
             tech_dim += 25
-            reasons.append("Breakout Candidate (放量临近历史高点)")
+            reasons.append("reason_breakout_candidate")
         
         if e["Factors"]["volume_spike"]:
             tech_dim += 10
-            reasons.append("Unusual Volume (主力异动放量)")
+            reasons.append("reason_volume_spike")
+
+        if e["Factors"]["high_volatility"]:
+            tech_dim += 5
+            reasons.append("reason_high_volatility")
 
         if e["Sector"] in top_3_sectors:
             e["Factors"]["strong_sector"] = True
             tech_dim += 5
-            reasons.append("Strong Sector (处于今日强势板块)")
+            reasons.append("reason_strong_sector")
 
-        # 超买与反转/回调策略矛盾时扣分
+        # Signal conflict detection
         if e["Factors"]["overbought"] and (e["Factors"]["reversal"] or e["Factors"]["pullback"]):
             tech_dim -= 10
-            reasons.append("⚠️ Overbought Risk (超买与反转/回调矛盾)")
+            conflicts.append("conflict_overbought_reversal")
+
+        if e["Factors"]["overbought"] and e["Factors"]["breakout"]:
+            # High-chase risk: breakout + overbought should warn, not reward
+            conflicts.append("conflict_overbought_breakout")
+
+        if e["Factors"]["reversal"] and e["Factors"]["bearish_momentum"]:
+            tech_dim -= 10
+            conflicts.append("conflict_reversal_bearish")
 
         tech_dim = max(min(tech_dim, 40), 0)
 
@@ -800,19 +811,23 @@ def get_confluences():
         fund_dim = 0
         if e["Factors"]["insider_buying"]:
             fund_dim += 15
-            reasons.append("Insider Buying (高管净买入)")
+            reasons.append("reason_insider_buying")
         if e["Factors"]["quality_compounder"]:
             fund_dim += 15
-            reasons.append("Quality Compounder (高ROE低负债绩优)")
+            reasons.append("reason_quality_compounder")
         if e["Factors"]["analyst_upgrade"]:
             fund_dim += 10
-            reasons.append("Analyst Upgrade (分析师评级上调)")
+            reasons.append("reason_analyst_upgrade")
         if e["Factors"]["earnings_catalyst"]:
             fund_dim += 5
-            reasons.append("Earnings Catalyst (财报催化剂)")
+            reasons.append("reason_earnings_catalyst")
         if e["Factors"]["analyst_downgrade"]:
             fund_dim -= 10
-            reasons.append("⚠️ Analyst Downgrade (分析师评级下调)")
+            reasons.append("reason_analyst_downgrade")
+        
+        # Quality compounder + downgrade conflict
+        if e["Factors"]["quality_compounder"] and e["Factors"]["analyst_downgrade"]:
+            conflicts.append("conflict_quality_downgrade")
 
         fund_dim = max(min(fund_dim, 35), 0)
 
@@ -820,30 +835,30 @@ def get_confluences():
         sent_dim = 0
         if e["Factors"]["momentum_leader"]:
             sent_dim += 15
-            reasons.append("Market Leader (市场主力关注)")
+            reasons.append("reason_momentum_leader")
         if e["Factors"]["reddit_popular"]:
             sent_dim += 10
-            reasons.append("Reddit Popular (散户讨论活跃)")
+            reasons.append("reason_reddit_popular")
         if e["Factors"]["short_squeeze"]:
             if e["Factors"]["reddit_popular"] or e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"]:
                 sent_dim += 10
-                reasons.append("Squeeze Play (高卖空比且关注度高)")
+                reasons.append("reason_squeeze_play")
             else:
                 sent_dim += 5
-                reasons.append("High Short Float (高卖空比例)")
+                reasons.append("reason_high_short_float")
         if e["Factors"]["bearish_momentum"]:
             sent_dim -= 5
-            reasons.append("⚠️ Bearish Momentum (近期跌幅居前)")
+            reasons.append("reason_bearish_momentum")
 
         sent_dim = max(min(sent_dim, 25), 0)
 
         # Combined Score
         score = tech_dim + fund_dim + sent_dim
 
-        # 计算纯技术面评分 TechScore
+        # TechScore: pure technical dimension scoring
         tech_score = 0
         
-        # 1. 核心形态得分 (最高 40) — 允许多形态叠加
+        # 1. Core pattern score (max 40)
         pattern_score = 0
         pattern_count = 0
         if e["Factors"]["breakout"]:
@@ -862,7 +877,7 @@ def get_confluences():
             pattern_score = min(pattern_score + 5, 40)
         tech_score += min(pattern_score, 40)
             
-        # 2. 成交量配合得分 (最高 25)
+        # 2. Volume confirmation (max 25)
         try:
             rvol = float(e["Rel Volume"]) if e["Rel Volume"] else 0
             if rvol >= 2.0:
@@ -874,17 +889,16 @@ def get_confluences():
         except:
             pass
             
-        # 3. 价格动量配合得分 (最高 20) — 反转策略适配
+        # 3. Price momentum (max 20)
         try:
             change_pct = normalize_change_pct(e["Change"])
             if e["Factors"]["reversal"]:
-                # 反转策略: 适度下跌是健康买入信号
                 if -5.0 <= change_pct <= -1.0:
                     tech_score += 20
                 elif -10.0 <= change_pct < -5.0:
                     tech_score += 15
                 elif change_pct > 0:
-                    tech_score += 10  # 已开始反弹
+                    tech_score += 10
             else:
                 if change_pct > 5.0:
                     tech_score += 20
@@ -895,14 +909,13 @@ def get_confluences():
         except:
             pass
             
-        # 4. 趋势环境调整 (最高 15)
+        # 4. Trend environment (max 15)
         trend_bonus = 0
         if e["Sector"] in top_3_sectors:
             trend_bonus += 10
         if e["Factors"]["overbought"] and (e["Factors"]["reversal"] or e["Factors"]["pullback"]):
-            trend_bonus -= 5  # 超买与反转/回调矛盾
-        elif e["Factors"]["overbought"] and e["Factors"]["breakout"]:
-            trend_bonus += 5  # 超买确认突破强度
+            trend_bonus -= 5
+        # Removed: overbought+breakout no longer gets a bonus (high-chase risk)
         tech_score += max(min(trend_bonus, 15), 0)
 
         e["TechScore"] = min(tech_score, 100)
@@ -913,8 +926,9 @@ def get_confluences():
             "sent": sent_dim
         }
         e["Reasons"] = reasons
+        e["Conflicts"] = conflicts
 
-        # 至少需要 2 个维度有得分才算真正的多重共振
+        # At least 2 scoring dimensions required for multi-factor confluence
         dims_with_score = sum([1 for d in [tech_dim, fund_dim, sent_dim] if d > 0])
         if e["Score"] >= 40 and dims_with_score >= 2:
             res_list.append(e)
