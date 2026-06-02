@@ -191,11 +191,7 @@ def health():
 @app.get("/api/sync")
 def trigger_sync(background_tasks: BackgroundTasks, api_key: str = None):
     expected_key = os.environ.get("SYNC_API_KEY")
-    if os.environ.get("VERCEL") and not expected_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Sync API key is not configured in environment variables."
-        )
+    # If SYNC_API_KEY is configured, enforce it. Otherwise, allow syncing without key by default.
     if expected_key and api_key != expected_key:
         raise HTTPException(status_code=401, detail="Invalid API key.")
         
