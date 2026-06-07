@@ -33,6 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRedditList = [];
     let currentConfluencesList = [];
     let currentWsbCalendar = null;
+    let currentTurbulenceData = null;
+    let turbulenceChartInstance = null;
     let watchlist = JSON.parse(localStorage.getItem('watchlist') || '{}');
     
     // API URL configuration (works for both local development and Vercel)
@@ -45,7 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
         insider: false,
         sectors: false,
         reddit: false,
-        watchlist: false
+        watchlist: false,
+        turbulence: false
     };
 
     // Cache for stock details to allow instant modal transitions
@@ -291,7 +294,27 @@ document.addEventListener('DOMContentLoaded', () => {
             watchlist_subtitle: "Your saved stocks for tracking. Data stored locally in your browser.",
             watchlist_empty: "No stocks saved yet. Click the ★ button on any stock card to add it here.",
             watchlist_remove: "Remove",
-            watchlist_note_placeholder: "Add a note..."
+            watchlist_note_placeholder: "Add a note...",
+            tab_turbulence: "Risk Radar",
+            turb_title: "Market Risk Radar & Turbulence Index",
+            turb_subtitle: "Based on Kritzman-Li (2010) Mahalanobis Distance model with Danger Zone divergence alerts.",
+            turb_current_state: "Risk Regime",
+            turb_pos_size: "Suggested Position",
+            turb_checklist: "Danger Zone Checklist",
+            turb_cond_dist: "1. Cross-Asset Turbulence Elevated",
+            turb_cond_spx: "2. S&P 500 above 50-day SMA",
+            turb_cond_vix: "3. VIX Complacent (< 25)",
+            turb_state_normal_desc: "Turbulence is normal. No structural threat detected.",
+            turb_state_elevated_desc: "Turbulence is elevated. Systemic risk is building up.",
+            turb_state_high_desc: "Danger Zone active! Divergence between price and structural risk is high.",
+            turb_state_critical_desc: "Extreme turbulence! Underlying cross-asset correlations are breaking down.",
+            turb_pos_desc: "Scale portfolio size dynamically according to systemic stress.",
+            turb_chart_title: "Historical Turbulence Index vs S&P 500 (SPY)",
+            turb_verdict_loading: "Checking conditions...",
+            turb_verdict_active: "🔥 Danger Zone active — High-conviction risk divergence alert!",
+            turb_verdict_inactive: "✓ Danger Zone inactive — Checklist conditions not met simultaneously.",
+            loading_turbulence: "Loading market risk metrics...",
+            err_turbulence: "Error: Failed to fetch market turbulence metrics from API."
         },
         zh: {
             tab_opps: "技术选股",
@@ -429,7 +452,27 @@ document.addEventListener('DOMContentLoaded', () => {
             watchlist_subtitle: "您收藏的关注标的。数据存储在本地浏览器中。",
             watchlist_empty: "暂无收藏。点击任意股票卡片上的 ★ 按钮即可添加。",
             watchlist_remove: "移除",
-            watchlist_note_placeholder: "添加备注..."
+            watchlist_note_placeholder: "添加备注...",
+            tab_turbulence: "风险雷达",
+            turb_title: "美股风险雷达与大类资产湍流指数",
+            turb_subtitle: "基于 Kritzman-Li (2010) 马氏距离跨资产协方差模型，检测大盘高位麻痹期与系统性风险。",
+            turb_current_state: "风险状态等级",
+            turb_pos_size: "最优推荐仓位",
+            turb_checklist: "Danger Zone 预警三联灯",
+            turb_cond_dist: "1. 跨资产阻尼指数突破警戒线",
+            turb_cond_spx: "2. 标普500指数处于50日均线上方",
+            turb_cond_vix: "3. VIX波动率低于25 (无恐慌)",
+            turb_state_normal_desc: "跨资产联动模式正常。未检测到明显的系统性结构威胁。",
+            turb_state_elevated_desc: "跨资产协方差异常。联动结构偏离正常态，结构性风险正在蓄积。",
+            turb_state_high_desc: "Danger Zone 预警信号已激活！股价高位但底层协方差已高度异常，市场进入麻痹窗口。",
+            turb_state_critical_desc: "极端风险警戒！底层大类资产联动结构正发生极其罕见的剧烈断裂。",
+            turb_pos_desc: "根据全市场系统性压力指标，动态调整大盘权益与对冲防御类资产的分配比率。",
+            turb_chart_title: "历史湍流指数与标普500 (SPY) 价格走势对比",
+            turb_verdict_loading: "正在验证三联指标达成状态...",
+            turb_verdict_active: "🔥 Danger Zone 预警信号已激活！模型发出最高置信度风险警示",
+            turb_verdict_inactive: "✓ Danger Zone 预警暂未激活 (三项条件未同时满足)",
+            loading_turbulence: "正在抓取并加载市场湍流指标...",
+            err_turbulence: "错误：无法从后台拉取市场协方差湍流数据。"
         }
     };
 
@@ -472,6 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (tabLoaded.watchlist) renderWatchlist();
+        if (tabLoaded.turbulence) loadTurbulence();
 
         // Reload TradingView widget if modal is open and TradingView chart is active
         const modal = document.getElementById('ticker-modal');
@@ -618,6 +662,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadSectors();
                 } else if (activeTab === 'reddit') {
                     loadReddit();
+                } else if (activeTab === 'turbulence') {
+                    loadTurbulence();
                 } else if (activeTab === 'watchlist') {
                     renderWatchlist();
                     tabLoaded.watchlist = true;
@@ -1655,6 +1701,295 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.appendChild(focusTd);
 
             tbody.appendChild(tr);
+        });
+    }
+
+    async function loadTurbulence() {
+        const tabEl = document.getElementById('turbulence-tab');
+        if (!tabEl) return;
+        
+        tabLoaded.turbulence = true;
+        
+        // Show loading state by writing it to the verdict text
+        const verdictText = document.getElementById('turb-verdict-text');
+        if (verdictText) verdictText.textContent = translations[activeLang].loading_turbulence;
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/turbulence`);
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const payload = await res.json();
+            currentTurbulenceData = payload;
+            renderTurbulence(payload);
+        } catch (error) {
+            console.error('Failed to load turbulence:', error);
+            if (verdictText) verdictText.textContent = translations[activeLang].err_turbulence;
+            const stateText = document.getElementById('turb-state-text');
+            if (stateText) stateText.textContent = 'ERROR';
+        }
+    }
+
+    function renderTurbulence(payload) {
+        if (!payload || payload.status === 'empty') {
+            const verdictText = document.getElementById('turb-verdict-text');
+            if (verdictText) verdictText.textContent = translations[activeLang].confluence_cache_empty || 'Cache empty. Please run sync.';
+            return;
+        }
+        
+        const status = payload.status;
+        const latestTurb = status.turbulence;
+        const latestSpx = status.spx;
+        const latestVix = status.vix;
+        
+        // 1. Update Regime Card
+        const stateText = document.getElementById('turb-state-text');
+        const stateDot = document.getElementById('turb-state-dot');
+        const stateDesc = document.getElementById('turb-state-desc');
+        
+        if (stateText) {
+            stateText.textContent = status.state;
+            stateText.style.color = status.state_color;
+        }
+        if (stateDot) {
+            stateDot.className = 'turb-state-dot';
+            stateDot.style.backgroundColor = status.state_color;
+            if (status.state === 'CRITICAL' || status.state === 'HIGH RISK') {
+                stateDot.classList.add('turb-state-dot-pulse');
+            }
+        }
+        if (stateDesc) {
+            let descKey = 'turb_state_normal_desc';
+            if (status.state === 'ELEVATED RISK') descKey = 'turb_state_elevated_desc';
+            else if (status.state === 'HIGH RISK') descKey = 'turb_state_high_desc';
+            else if (status.state === 'CRITICAL') descKey = 'turb_state_critical_desc';
+            stateDesc.textContent = translations[activeLang][descKey] || '';
+        }
+        
+        // 2. Update Position Card
+        const posVal = document.getElementById('turb-pos-val');
+        const posBar = document.getElementById('turb-pos-bar');
+        
+        if (posVal) posVal.textContent = status.position_size_pct;
+        if (posBar) {
+            posBar.style.width = `${status.position_size_pct}%`;
+            posBar.style.backgroundColor = status.state_color;
+        }
+        
+        // 3. Update Checklist
+        const turbIcon = document.getElementById('check-icon-turb');
+        const turbVal = document.getElementById('check-val-turb');
+        const spxIcon = document.getElementById('check-icon-spx');
+        const spxVal = document.getElementById('check-val-spx');
+        const vixIcon = document.getElementById('check-icon-vix');
+        const vixVal = document.getElementById('check-val-vix');
+        
+        const turbMet = latestTurb.slow > latestTurb.warning_threshold;
+        const spxMet = latestSpx.above_sma50;
+        const vixMet = latestVix.below_25;
+        
+        if (turbVal) turbVal.textContent = `${latestTurb.slow.toFixed(2)} (vs ${latestTurb.warning_threshold.toFixed(2)})`;
+        if (turbIcon) {
+            turbIcon.outerHTML = turbMet 
+                ? `<i id="check-icon-turb" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
+                : `<i id="check-icon-turb" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        if (spxVal) spxVal.textContent = `${latestSpx.level.toFixed(1)} (vs SMA50 ${latestSpx.sma50.toFixed(1)})`;
+        if (spxIcon) {
+            spxIcon.outerHTML = spxMet 
+                ? `<i id="check-icon-spx" class="check-icon met" data-lucide="check-circle-2"></i>`
+                : `<i id="check-icon-spx" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(2)} (vs 25.0)`;
+        if (vixIcon) {
+            vixIcon.outerHTML = vixMet 
+                ? `<i id="check-icon-vix" class="check-icon met" data-lucide="check-circle-2"></i>`
+                : `<i id="check-icon-vix" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        // Verdict Banner
+        const verdictBanner = document.getElementById('turb-verdict-banner');
+        const verdictText = document.getElementById('turb-verdict-text');
+        
+        if (verdictBanner && verdictText) {
+            if (status.divergence.active) {
+                verdictBanner.className = 'verdict-banner active';
+                verdictText.textContent = translations[activeLang].turb_verdict_active;
+            } else {
+                verdictBanner.className = 'verdict-banner';
+                verdictText.textContent = translations[activeLang].turb_verdict_inactive;
+            }
+        }
+        
+        lucide.createIcons(); // Instantly compile dynamic Lucide tags
+        
+        // 4. Render Chart
+        renderTurbulenceChart(payload.chart_series);
+    }
+
+    function renderTurbulenceChart(series) {
+        const canvas = document.getElementById('turbulence-chart');
+        if (!canvas) return;
+        
+        // Destroy existing instance to avoid duplicate overlays
+        if (turbulenceChartInstance) {
+            turbulenceChartInstance.destroy();
+        }
+        
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#a0aec0' : '#4a5568';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
+        
+        const labels = series.map(x => x.date);
+        const turbSlow = series.map(x => x.turb_slow);
+        const turbFast = series.map(x => x.turb_fast);
+        const slowWarn = series.map(x => x.slow_warn);
+        const slowExtreme = series.map(x => x.slow_extreme);
+        const spxPrices = series.map(x => x.spx);
+        
+        const ctx = canvas.getContext('2d');
+        turbulenceChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: activeLang === 'zh' ? '慢速湍流指数 (5d EMA)' : 'Slow Turbulence (5d EMA)',
+                        data: turbSlow,
+                        borderColor: isDark ? '#d4c196' : '#c5b086', // Brand gold matching ledger
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: activeLang === 'zh' ? '快速湍流指数 (2d EMA)' : 'Fast Turbulence (2d EMA)',
+                        data: turbFast,
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)',
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        pointHoverRadius: 3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: activeLang === 'zh' ? '警戒阈值 (95%)' : 'Warning Threshold (95%)',
+                        data: slowWarn,
+                        borderColor: '#ff9f1c', // Vibrant warning orange
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: activeLang === 'zh' ? '极端风险阈值 (99%)' : 'Extreme Threshold (99%)',
+                        data: slowExtreme,
+                        borderColor: '#e71d36', // Bright red
+                        borderWidth: 1.5,
+                        borderDash: [3, 3],
+                        pointRadius: 0,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: activeLang === 'zh' ? '标普500 (SPY)' : 'S&P 500 (SPY)',
+                        data: spxPrices,
+                        borderColor: isDark ? '#5fa3df' : '#2c70ab', // Blue axis
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                family: 'JetBrains Mono',
+                                size: 10
+                            },
+                            maxTicksLimit: 12
+                        }
+                    },
+                    y: {
+                        position: 'left',
+                        grid: {
+                            color: gridColor
+                        },
+                        title: {
+                            display: true,
+                            text: activeLang === 'zh' ? '湍流指数 (马氏距离)' : 'Turbulence Score',
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                family: 'JetBrains Mono',
+                                size: 10
+                            }
+                        }
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: {
+                            drawOnChartArea: false // prevent grid overlaps
+                        },
+                        title: {
+                            display: true,
+                            text: 'SPY Price ($)',
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                family: 'JetBrains Mono',
+                                size: 10
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: textColor,
+                            font: {
+                                family: 'var(--font-sans)',
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? '#11192a' : '#ffffff',
+                        titleColor: isDark ? '#e3e0d9' : '#151c26',
+                        bodyColor: isDark ? '#c4ccd7' : '#394a62',
+                        borderColor: 'var(--border)',
+                        borderWidth: 1,
+                        titleFont: {
+                            family: 'var(--font-sans)',
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            family: 'JetBrains Mono'
+                        }
+                    }
+                }
+            }
         });
     }
 

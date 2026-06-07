@@ -4,6 +4,9 @@ import json
 import time
 import requests
 import pandas as pd
+import numpy as np
+import yfinance as yf
+from datetime import datetime, timezone
 
 def retry_with_backoff(func, max_retries=3, base_delay=2):
     """Execute a function with exponential backoff retry."""
@@ -273,13 +276,186 @@ def sync_reddit():
     except Exception as e:
         print("Failed to sync Reddit sentiment after retries:", e)
 
+TURB_TICKERS = [
+    "XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU", "XLRE", "XLC",
+    "TLT", "IEF", "SHY",
+    "GLD", "DBC",
+    "EFA", "EEM"
+]
+
+def calculate_market_turbulence():
+    print("Fetching historical data for 18 ETFs + SPY + VIX...")
+    all_tickers = TURB_TICKERS + ["SPY", "^VIX"]
+    
+    def do_download():
+        df = yf.download(all_tickers, period="3y", progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            if 'Adj Close' in df.columns.levels[0]:
+                return df['Adj Close']
+            elif 'Close' in df.columns.levels[0]:
+                return df['Close']
+        return df
+        
+    df_prices = retry_with_backoff(do_download)
+    df_prices = df_prices.ffill().bfill().dropna()
+    
+    df_returns = df_prices[TURB_TICKERS].pct_change().dropna()
+    spy_series = df_prices["SPY"]
+    vix_series = df_prices["^VIX"]
+    spy_sma50 = spy_series.rolling(window=50).mean()
+    
+    turb_records = []
+    dates = df_returns.index
+    n_assets = len(TURB_TICKERS)
+    
+    for i in range(252, len(df_returns)):
+        current_date = dates[i]
+        r_t = df_returns.iloc[i].values
+        history = df_returns.iloc[i-252:i]
+        mu = history.mean().values
+        cov = history.cov().values
+        
+        # Calculate condition number of covariance matrix
+        cond_num = np.linalg.cond(cov)
+        cov_healthy = bool(cond_num < 1000)
+        
+        try:
+            cov_inv = np.linalg.pinv(cov)
+            diff = r_t - mu
+            d_t = float(diff.T @ cov_inv @ diff) / n_assets
+        except Exception as e:
+            d_t = np.nan
+            cov_healthy = False
+            
+        turb_records.append({
+            "date": current_date.strftime("%Y-%m-%d"),
+            "turb_raw": d_t,
+            "cov_condition_number": float(cond_num) if not np.isinf(cond_num) and not np.isnan(cond_num) else 999999.0,
+            "cov_healthy": cov_healthy,
+            "spx_level": float(spy_series.loc[current_date]),
+            "spx_sma50": float(spy_sma50.loc[current_date]) if not np.isnan(spy_sma50.loc[current_date]) else float(spy_series.loc[current_date]),
+            "vix_level": float(vix_series.loc[current_date])
+        })
+        
+    df_result = pd.DataFrame(turb_records)
+    df_result['turb_slow'] = df_result['turb_raw'].ewm(span=5, adjust=False).mean()
+    df_result['turb_fast'] = df_result['turb_raw'].ewm(span=2, adjust=False).mean()
+    
+    # Calculate 504 trading days rolling percentile (2 years)
+    df_result['slow_warn'] = df_result['turb_slow'].rolling(504, min_periods=100).quantile(0.95)
+    df_result['slow_extreme'] = df_result['turb_slow'].rolling(504, min_periods=100).quantile(0.99)
+    
+    # Handle NaN values
+    df_result['slow_warn'] = df_result['slow_warn'].ffill().bfill()
+    df_result['slow_extreme'] = df_result['slow_extreme'].ffill().bfill()
+    
+    # Fallback default values
+    df_result['slow_warn'] = df_result['slow_warn'].fillna(2.0)
+    df_result['slow_extreme'] = df_result['slow_extreme'].fillna(4.0)
+    
+    return df_result
+
+def process_turbulence_output(df_result):
+    latest = df_result.iloc[-1]
+    
+    turb_above_warn = bool(latest['turb_slow'] > latest['slow_warn'])
+    spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'])
+    vix_complacent = bool(latest['vix_level'] < 25.0)
+    
+    danger_zone_active = bool(turb_above_warn and spx_above_sma50 and vix_complacent)
+    
+    state = "NORMAL"
+    if latest['turb_slow'] > latest['slow_extreme'] and vix_complacent:
+        state = "CRITICAL"
+    elif danger_zone_active:
+        state = "HIGH RISK"
+    elif turb_above_warn:
+        state = "ELEVATED RISK"
+        
+    state_colors = {
+        "NORMAL": "#2ec4b6",
+        "ELEVATED RISK": "#ffbf00",
+        "HIGH RISK": "#d98a2b",
+        "CRITICAL": "#e71d36"
+    }
+    
+    chart_series = []
+    for _, row in df_result.iterrows():
+        t_warn = row['turb_slow'] > row['slow_warn']
+        s_above = row['spx_level'] > row['spx_sma50']
+        v_comp = row['vix_level'] < 25.0
+        dz = bool(t_warn and s_above and v_comp)
+        
+        chart_series.append({
+            "date": row['date'],
+            "turb_slow": round(float(row['turb_slow']), 2),
+            "turb_fast": round(float(row['turb_fast']), 2),
+            "slow_warn": round(float(row['slow_warn']), 2),
+            "slow_extreme": round(float(row['slow_extreme']), 2),
+            "spx": round(float(row['spx_level']), 2),
+            "vix": round(float(row['vix_level']), 2),
+            "danger_zone": dz
+        })
+        
+    position_size_pct = 100
+    if state == "ELEVATED RISK":
+        position_size_pct = 75
+    elif state == "HIGH RISK":
+        position_size_pct = 50
+    elif state == "CRITICAL":
+        position_size_pct = 25
+        
+    payload = {
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "status": {
+            "date": latest['date'],
+            "state": state,
+            "state_color": state_colors[state],
+            "position_size_pct": position_size_pct,
+            "turbulence": {
+                "slow": round(float(latest['turb_slow']), 2),
+                "fast": round(float(latest['turb_fast']), 2),
+                "warning_threshold": round(float(latest['slow_warn']), 2),
+                "extreme_threshold": round(float(latest['slow_extreme']), 2),
+                "cov_condition_number": round(float(latest['cov_condition_number']), 2),
+                "cov_healthy": bool(latest['cov_healthy'])
+            },
+            "spx": {
+                "level": round(float(latest['spx_level']), 2),
+                "sma50": round(float(latest['spx_sma50']), 2),
+                "above_sma50": spx_above_sma50
+            },
+            "vix": {
+                "level": round(float(latest['vix_level']), 2),
+                "below_25": vix_complacent
+            },
+            "divergence": {
+                "active": danger_zone_active
+            }
+        },
+        "chart_series": chart_series
+    }
+    return payload
+
+def sync_turbulence():
+    print("Syncing market turbulence index...")
+    try:
+        df_result = calculate_market_turbulence()
+        payload = process_turbulence_output(df_result)
+        push_to_kv("market_turbulence", payload, expires_in=172800) # 48 hours cache
+        print("Market turbulence sync successful.")
+    except Exception as e:
+        print("Failed to sync market turbulence:", e)
+
 def run_all_sync():
     sync_opportunities()
     sync_insiders()
     sync_sectors()
     sync_reddit()
+    sync_turbulence()
 
 if __name__ == "__main__":
     print("Starting local sync to Vercel KV...")
     run_all_sync()
     print("Sync completed successfully!")
+

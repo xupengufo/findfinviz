@@ -1817,3 +1817,183 @@ html[data-theme=dark] .tech-score-low {
 .spin-animation {
     animation: spin 1s linear infinite;
 }
+
+/* ===== Turbulence (Risk Radar) Custom Dashboard Styles ===== */
+.turb-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+    .turb-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.turb-card {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.turb-card h3 {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+}
+
+.state-badge-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0 8px 0;
+}
+
+.turb-state-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.turb-state-dot-pulse {
+    animation: turbDotPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes turbDotPulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    50% { transform: scale(1.25); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.6; }
+}
+
+.turb-state-text {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+}
+
+.turb-state-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.pos-percentage {
+    font-family: var(--font-mono);
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 8px 0;
+}
+
+.pos-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pos-bar-fill {
+    height: 100%;
+    background: var(--brand-gold);
+    border-radius: 4px;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pos-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 12px;
+    line-height: 1.4;
+}
+
+.turb-checklist-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.turb-checklist-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.turb-checklist-list li .check-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.turb-checklist-list li .check-icon.met {
+    color: var(--positive) !important;
+}
+
+.turb-checklist-list li .check-icon.unmet {
+    color: var(--text-dark) !important;
+}
+
+.turb-checklist-list li .check-icon.warn-met {
+    color: var(--negative) !important;
+}
+
+.turb-checklist-list li .font-data {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.verdict-banner {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    color: var(--text-secondary);
+}
+
+.verdict-banner.active {
+    background: var(--negative-glow);
+    border-color: var(--negative);
+    color: var(--negative);
+    animation: dangerGlow 2s infinite ease-in-out;
+}
+
+@keyframes dangerGlow {
+    0% { box-shadow: 0 0 4px rgba(225, 145, 108, 0.1); }
+    50% { box-shadow: 0 0 12px rgba(225, 145, 108, 0.25); }
+    100% { box-shadow: 0 0 4px rgba(225, 145, 108, 0.1); }
+}
+
+.turb-chart-wrapper {
+    min-height: 400px;
+    position: relative;
+    width: 100%;
+}
+

@@ -1016,6 +1016,31 @@ def get_wsb_calendar():
         print(f"[ERROR] wsb-calendar: {e}")
         return {"data": {"zh": [], "en": []}, "source": "error", "error": str(e)}
 
+@app.get("/api/turbulence")
+def get_turbulence():
+    cached_data = cache.get("market_turbulence")
+    if cached_data:
+        # Add a source indicator for debugging
+        cached_data["source"] = "cache"
+        return cached_data
+    
+    return {
+        "status": "empty", 
+        "message": "Cache is empty. Please run sync first.", 
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "status": {
+            "date": "",
+            "state": "NORMAL",
+            "state_color": "#2ec4b6",
+            "position_size_pct": 100,
+            "turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
+            "spx": {"level": 0.0, "sma50": 0.0, "above_sma50": True},
+            "vix": {"level": 0.0, "below_25": True},
+            "divergence": {"active": False}
+        },
+        "chart_series": []
+    }
+
 # Serve static frontend files (works locally and packaged in Vercel)
 from fastapi.staticfiles import StaticFiles
 public_path = os.path.join(project_root, "public")

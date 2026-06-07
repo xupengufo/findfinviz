@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..700,0..100,0..1&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@0.460.0"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -38,6 +40,9 @@
                         </button>
                         <button class="nav-btn" data-tab="reddit">
                             <i data-lucide="message-square"></i> <span data-i18n="tab_reddit">Reddit Sentiment</span>
+                        </button>
+                        <button class="nav-btn" data-tab="turbulence">
+                            <i data-lucide="shield"></i> <span data-i18n="tab_turbulence">Risk Radar</span>
                         </button>
                         <button class="nav-btn" data-tab="watchlist">
                             <i data-lucide="star"></i> <span data-i18n="tab_watchlist">My Picks</span>
@@ -292,6 +297,76 @@
                             <!-- Populated dynamically -->
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- Turbulence (Risk Radar) Tab -->
+            <section id="turbulence-tab" class="tab-content">
+                <div class="filter-bar">
+                    <div class="filter-title">
+                        <i data-lucide="shield"></i>
+                        <h2 data-i18n="turb_title">Market Risk Radar & Turbulence Index</h2>
+                    </div>
+                    <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" data-i18n="turb_subtitle">
+                        Based on Kritzman-Li (2010) Mahalanobis Distance model with Danger Zone divergence alerts.
+                    </div>
+                </div>
+
+                <div class="turb-dashboard-grid">
+                    <!-- Card 1: Risk State -->
+                    <div class="turb-card state-card surface-card">
+                        <h3 data-i18n="turb_current_state">Risk Regime</h3>
+                        <div class="state-badge-wrap">
+                            <span id="turb-state-dot" class="turb-state-dot"></span>
+                            <span id="turb-state-text" class="turb-state-text">-</span>
+                        </div>
+                        <p id="turb-state-desc" class="turb-state-desc" data-i18n="turb_state_normal_desc">Turbulence is normal. No structural threat detected.</p>
+                    </div>
+
+                    <!-- Card 2: Recommended Position -->
+                    <div class="turb-card position-card surface-card">
+                        <h3 data-i18n="turb_pos_size">Suggested Position</h3>
+                        <div class="pos-percentage font-data"><span id="turb-pos-val">-</span>%</div>
+                        <div class="pos-bar-container">
+                            <div id="turb-pos-bar" class="pos-bar-fill" style="width: 0%;"></div>
+                        </div>
+                        <p class="pos-desc" data-i18n="turb_pos_desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 12px;">Scale portfolio size dynamically according to systemic stress.</p>
+                    </div>
+
+                    <!-- Card 3: Checklist -->
+                    <div class="turb-card checklist-card surface-card">
+                        <h3 data-i18n="turb_checklist">Danger Zone Checklist</h3>
+                        <ul class="turb-checklist-list">
+                            <li>
+                                <i id="check-icon-turb" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_dist">1. Cross-Asset Turbulence Elevated</span>
+                                <span id="check-val-turb" class="font-data">-</span>
+                            </li>
+                            <li>
+                                <i id="check-icon-spx" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_spx">2. S&P 500 above 50-day SMA</span>
+                                <span id="check-val-spx" class="font-data">-</span>
+                            </li>
+                            <li>
+                                <i id="check-icon-vix" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_vix">3. VIX Complacent (< 25)</span>
+                                <span id="check-val-vix" class="font-data">-</span>
+                            </li>
+                        </ul>
+                        <div id="turb-verdict-banner" class="verdict-banner">
+                            <i data-lucide="info" style="width: 14px; height: 14px; flex-shrink: 0;"></i> 
+                            <span id="turb-verdict-text" data-i18n="turb_verdict_loading">Checking conditions...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container surface-card" style="margin-top: 20px; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 data-i18n="turb_chart_title" style="margin: 0;">Historical Turbulence Index vs S&P 500 (SPY)</h3>
+                    </div>
+                    <div class="turb-chart-wrapper" style="position: relative; min-height: 400px; width: 100%;">
+                        <canvas id="turbulence-chart"></canvas>
+                    </div>
                 </div>
             </section>
 
