@@ -1066,7 +1066,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="confluence-header">
                     <div>
                         <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
-                        <button class="watchlist-star-btn ${isInWatchlist(item['Ticker']) ? 'active' : ''}" data-ticker="${escapeHtml(item['Ticker'])}" title="Add to watchlist" style="margin-left: 6px;"><i data-lucide="star" style="width:12px;height:12px;"></i></button>
                         <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
                         <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
                             ${dominantPattern ? `<span class="pattern-badge ${patternClass}">${dominantPattern}</span>` : ''}
@@ -1171,12 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <button class="watchlist-star-btn ${isInWatchlist(item['Ticker']) ? 'active' : ''}" data-ticker="${escapeHtml(item['Ticker'])}" title="Add to watchlist">
-                            <i data-lucide="star" style="width:14px;height:14px;"></i>
-                        </button>
-                        <span class="card-change ${changeClass}">${changeText}</span>
-                    </div>
+                    <span class="card-change ${changeClass}">${changeText}</span>
                 </div>
                 <div class="card-company">${escapeHtml(item['Company']) || '-'}</div>
                 ${badgesHtml}
@@ -1205,13 +1199,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 openModal(item['Ticker']);
             });
 
-            const starBtn = card.querySelector('.watchlist-star-btn');
-            if (starBtn) {
-                starBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleWatchlist(item['Ticker'], item['Company'], item['Sector'], item['Industry']);
-                });
-            }
             grid.appendChild(card);
         });
 
