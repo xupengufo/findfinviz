@@ -179,11 +179,18 @@ body::before {
     border-radius: 8px;
     padding: 3px;
     transition: background 0.3s, border-color 0.3s;
+    overflow-x: auto;
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.page-nav-tabs::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for Chrome, Safari and Opera */
 }
 
 .page-nav-tabs-scroll {
     display: flex;
     gap: 2px;
+    flex-shrink: 0;
 }
 
 .nav-btn {
@@ -202,11 +209,14 @@ body::before {
     align-items: center;
     gap: 8px;
     transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav-btn i {
     width: 14px;
     height: 14px;
+    flex-shrink: 0;
 }
 
 .nav-btn:hover {
