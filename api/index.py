@@ -17,12 +17,7 @@ finviz_dir = os.path.join(project_root, "finvizfinance")
 if finviz_dir not in sys.path:
     sys.path.insert(0, finviz_dir)
 
-from finvizfinance.quote import finvizfinance
-from finvizfinance.insider import Insider
-from finvizfinance.screener.overview import Overview
-from finvizfinance.screener.custom import Custom
-from finvizfinance.group.overview import Overview as GroupOverview
-from local_sync import run_all_sync
+# Deferred imports for faster cold starts
 
 app = FastAPI(title="US Stock Trading Opportunities API")
 
@@ -217,6 +212,7 @@ def trigger_sync(background_tasks: BackgroundTasks, api_key: str = None):
     if expected_key and api_key != expected_key:
         raise HTTPException(status_code=401, detail="Invalid API key.")
         
+    from local_sync import run_all_sync
     background_tasks.add_task(run_all_sync)
     return {"status": "sync_triggered", "message": "Synchronization started in the background."}
 
@@ -260,6 +256,7 @@ def get_opportunities(signal: str = "Oversold"):
         )
 
     try:
+        from finvizfinance.screener.custom import Custom
         fcustom = Custom()
         if normalized_signal == "high_short_interest":
             fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
@@ -317,6 +314,7 @@ def get_insiders(option: str = "top owner trade"):
         )
 
     try:
+        from finvizfinance.insider import Insider
         finsider = Insider(option=option)
         df = finsider.get_insider()
         
@@ -340,6 +338,7 @@ def get_sectors():
         return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
 
     try:
+        from finvizfinance.group.overview import Overview as GroupOverview
         fgoverview = GroupOverview()
         df = fgoverview.screener_view(group="Sector")
         
@@ -453,6 +452,7 @@ def get_stock(ticker: str):
         return {"data": cached_data, "source": "cache"}
 
     try:
+        from finvizfinance.quote import finvizfinance
         stock = finvizfinance(ticker)
         if not stock.flag:
             raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found on FinViz.")
