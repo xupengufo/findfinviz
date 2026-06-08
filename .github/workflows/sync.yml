@@ -1,6 +1,9 @@
 name: Cloud Stock Data Sync
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Runs every 4 hours from Monday to Friday (UTC timezone)
     - cron: '0 13,17,21,1 * * 1-5'
