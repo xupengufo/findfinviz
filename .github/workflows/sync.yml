@@ -5,8 +5,8 @@ on:
     branches:
       - main
   schedule:
-    # Runs every 4 hours from Monday to Friday (UTC timezone)
-    - cron: '0 13,17,21,1 * * 1-5'
+    # Runs every 4 hours from Monday to Saturday (UTC timezone) to cover Friday post-market
+    - cron: '0 13,17,21,1 * * 1-6'
   workflow_dispatch:
     # Allows manual runs from GitHub UI
 
