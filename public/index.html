@@ -346,7 +346,7 @@
                             </li>
                             <li>
                                 <i id="check-icon-vix" class="check-icon text-muted" data-lucide="circle"></i>
-                                <span data-i18n="turb_cond_vix">3. VIX Complacent (< 25)</span>
+                                <span data-i18n="turb_cond_vix">3. VIX Below Dynamic Threshold</span>
                                 <span id="check-val-vix" class="font-data">-</span>
                             </li>
                         </ul>
@@ -357,13 +357,35 @@
                     </div>
                 </div>
 
+                <!-- Historical Danger Zone Records -->
+                <div id="turb-dz-history" class="turb-dz-history surface-card" style="margin-top: 20px; padding: 20px; display: none;">
+                    <h3 data-i18n="turb_dz_history_title" style="margin: 0 0 12px 0; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Historical Danger Zone Activations</h3>
+                    <div id="turb-dz-history-list" class="turb-dz-history-list"></div>
+                </div>
+
                 <div class="chart-container surface-card" style="margin-top: 20px; padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 8px;">
                         <h3 data-i18n="turb_chart_title" style="margin: 0;">Historical Turbulence Index vs S&P 500 (SPY)</h3>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="turb-range-selector segmented">
+                                <button class="turb-range-btn" data-range="1m">1M</button>
+                                <button class="turb-range-btn" data-range="3m">3M</button>
+                                <button class="turb-range-btn" data-range="6m">6M</button>
+                                <button class="turb-range-btn" data-range="1y">1Y</button>
+                                <button class="turb-range-btn active" data-range="all">ALL</button>
+                            </div>
+                            <span id="turb-updated-at" class="turb-updated-at" style="font-size: 0.65rem; color: var(--text-dark); font-family: var(--font-mono);"></span>
+                        </div>
                     </div>
                     <div class="turb-chart-wrapper" style="position: relative; min-height: 400px; width: 100%;">
                         <canvas id="turbulence-chart"></canvas>
                     </div>
+                </div>
+
+                <!-- Compliance Disclaimer -->
+                <div class="turb-disclaimer">
+                    <i data-lucide="alert-circle" style="width: 12px; height: 12px; flex-shrink: 0;"></i>
+                    <span data-i18n="turb_disclaimer">Disclaimer: This tool is for educational and informational purposes only. It does not constitute investment advice, solicitation, or recommendation to buy or sell any securities. Past performance is not indicative of future results. Always consult a qualified financial advisor before making investment decisions.</span>
                 </div>
             </section>
 

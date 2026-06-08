@@ -1047,7 +1047,7 @@ def get_turbulence():
         return cached_data
     
     return {
-        "status": "empty", 
+        "cache_status": "empty", 
         "message": "Cache is empty. Please run sync first.", 
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status": {
@@ -1057,9 +1057,10 @@ def get_turbulence():
             "position_size_pct": 100,
             "turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
             "spx": {"level": 0.0, "sma50": 0.0, "above_sma50": True},
-            "vix": {"level": 0.0, "below_25": True},
+            "vix": {"level": 0.0, "below_25": True, "dynamic_threshold": 25.0, "rolling_mean": 20.0, "below_dynamic": True},
             "divergence": {"active": False}
         },
+        "danger_zone_history": [],
         "chart_series": []
     }
 

@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentConfluencesList = [];
     let currentWsbCalendar = null;
     let currentTurbulenceData = null;
+    let currentTurbulenceRange = 'all';
     let turbulenceChartInstance = null;
     let watchlist = JSON.parse(localStorage.getItem('watchlist') || '{}');
     
@@ -303,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_checklist: "Danger Zone Checklist",
             turb_cond_dist: "1. Cross-Asset Turbulence Elevated",
             turb_cond_spx: "2. S&P 500 above 50-day SMA",
-            turb_cond_vix: "3. VIX Complacent (< 25)",
+            turb_cond_vix: "3. VIX below dynamic threshold",
             turb_state_normal_desc: "Turbulence is normal. No structural threat detected.",
             turb_state_elevated_desc: "Turbulence is elevated. Systemic risk is building up.",
             turb_state_high_desc: "Danger Zone active! Divergence between price and structural risk is high.",
@@ -314,7 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_verdict_active: "🔥 Danger Zone active — High-conviction risk divergence alert!",
             turb_verdict_inactive: "✓ Danger Zone inactive — Checklist conditions not met simultaneously.",
             loading_turbulence: "Loading market risk metrics...",
-            err_turbulence: "Error: Failed to fetch market turbulence metrics from API."
+            err_turbulence: "Error: Failed to fetch market turbulence metrics from API.",
+            last_updated: "Last updated",
+            turb_dz_history_title: "Historical Danger Zone Activations",
+            turb_disclaimer: "Disclaimer: This tool is for educational and informational purposes only. It does not constitute investment advice, solicitation, or recommendation to buy or sell any securities. Past performance is not indicative of future results. Always consult a qualified financial advisor before making investment decisions."
         },
         zh: {
             tab_opps: "技术选股",
@@ -461,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_checklist: "Danger Zone 预警三联灯",
             turb_cond_dist: "1. 跨资产阻尼指数突破警戒线",
             turb_cond_spx: "2. 标普500指数处于50日均线上方",
-            turb_cond_vix: "3. VIX波动率低于25 (无恐慌)",
+            turb_cond_vix: "3. VIX 波动率低于动态阈值",
             turb_state_normal_desc: "跨资产联动模式正常。未检测到明显的系统性结构威胁。",
             turb_state_elevated_desc: "跨资产协方差异常。联动结构偏离正常态，结构性风险正在蓄积。",
             turb_state_high_desc: "Danger Zone 预警信号已激活！股价高位但底层协方差已高度异常，市场进入麻痹窗口。",
@@ -472,7 +476,10 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_verdict_active: "🔥 Danger Zone 预警信号已激活！模型发出最高置信度风险警示",
             turb_verdict_inactive: "✓ Danger Zone 预警暂未激活 (三项条件未同时满足)",
             loading_turbulence: "正在抓取并加载市场湍流指标...",
-            err_turbulence: "错误：无法从后台拉取市场协方差湍流数据。"
+            err_turbulence: "错误：无法从后台拉取市场协方差湍流数据。",
+            last_updated: "最后更新时间",
+            turb_dz_history_title: "历史 Danger Zone 预警触发记录",
+            turb_disclaimer: "免责声明：本工具仅用于学术研究与信息展示，不构成任何投资建议、邀约或买卖证券推荐。历史业绩不代表未来表现。在做出投资决策前，请务必咨询专业金融顾问。"
         }
     };
 
@@ -751,6 +758,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.classList.add('active');
                 activeConfluenceMcapFilter = btn.getAttribute('data-mcap');
                 renderConfluences(currentConfluencesList);
+            });
+        });
+
+        // Range selectors for Turbulence
+        const rangeButtons = document.querySelectorAll('.turb-range-btn');
+        rangeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                rangeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentTurbulenceRange = btn.getAttribute('data-range');
+                if (currentTurbulenceData) {
+                    renderTurbulenceChart(currentTurbulenceData.chart_series);
+                }
             });
         });
 
@@ -1716,7 +1736,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderTurbulence(payload) {
-        if (!payload || payload.status === 'empty') {
+        if (!payload || payload.cache_status === 'empty') {
             const verdictText = document.getElementById('turb-verdict-text');
             if (verdictText) verdictText.textContent = translations[activeLang].confluence_cache_empty || 'Cache empty. Please run sync.';
             return;
@@ -1771,7 +1791,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const turbMet = latestTurb.slow > latestTurb.warning_threshold;
         const spxMet = latestSpx.above_sma50;
-        const vixMet = latestVix.below_25;
+        const vixMet = latestVix.hasOwnProperty('below_dynamic') ? latestVix.below_dynamic : latestVix.below_25;
+        const vixThreshVal = latestVix.hasOwnProperty('dynamic_threshold') ? latestVix.dynamic_threshold : 25.0;
         
         if (turbVal) turbVal.textContent = `${latestTurb.slow.toFixed(2)} (vs ${latestTurb.warning_threshold.toFixed(2)})`;
         if (turbIcon) {
@@ -1787,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `<i id="check-icon-spx" class="check-icon unmet" data-lucide="circle"></i>`;
         }
         
-        if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(2)} (vs 25.0)`;
+        if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(2)} (vs ${vixThreshVal.toFixed(1)})`;
         if (vixIcon) {
             vixIcon.outerHTML = vixMet 
                 ? `<i id="check-icon-vix" class="check-icon met" data-lucide="check-circle-2"></i>`
@@ -1808,10 +1829,95 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // Update data updated at time
+        const updatedAtEl = document.getElementById('turb-updated-at');
+        if (updatedAtEl && payload.updated_at) {
+            const date = new Date(payload.updated_at);
+            const formattedDate = date.toLocaleString(activeLang === 'zh' ? 'zh-CN' : 'en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            });
+            updatedAtEl.textContent = `${translations[activeLang].last_updated || 'Updated'}: ${formattedDate}`;
+        }
+        
+        // Update Danger Zone History Panel
+        const dzHistoryEl = document.getElementById('turb-dz-history');
+        const dzHistoryListEl = document.getElementById('turb-dz-history-list');
+        if (dzHistoryEl && dzHistoryListEl) {
+            const history = payload.danger_zone_history || [];
+            if (history.length > 0) {
+                dzHistoryEl.style.display = 'block';
+                dzHistoryListEl.innerHTML = `
+                    <table class="insider-table" style="width: 100%; font-size: 0.75rem; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border); text-align: left;">
+                                <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${activeLang === 'zh' ? '开始日期' : 'Start Date'}</th>
+                                <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${activeLang === 'zh' ? '结束日期' : 'End Date'}</th>
+                                <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${activeLang === 'zh' ? '持续时间' : 'Duration'}</th>
+                                <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500; text-align: right;">${activeLang === 'zh' ? '峰值阻尼指数' : 'Peak Turbulence'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${history.map(item => `
+                                <tr style="border-bottom: 1px dashed var(--border);">
+                                    <td style="padding: 8px 4px; font-family: var(--font-mono); font-weight: 500; color: #e71d36;">
+                                        <i data-lucide="alert-triangle" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 4px; color: #e71d36;"></i>
+                                        ${item.start_date}
+                                    </td>
+                                    <td style="padding: 8px 4px; font-family: var(--font-mono);">${item.end_date}</td>
+                                    <td style="padding: 8px 4px;">${item.duration_days} ${activeLang === 'zh' ? '天' : 'days'}</td>
+                                    <td style="padding: 8px 4px; font-family: var(--font-mono); text-align: right; font-weight: 600;">${item.peak_turb.toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                dzHistoryEl.style.display = 'none';
+            }
+        }
+        
         lucide.createIcons(); // Instantly compile dynamic Lucide tags
         
         // 4. Render Chart
         renderTurbulenceChart(payload.chart_series);
+    }
+
+    function filterSeriesByRange(series, range) {
+        if (range === 'all' || !series || series.length === 0) return series;
+        const latestDateStr = series[series.length - 1].date;
+        const latestDate = new Date(latestDateStr);
+        let limitDate = new Date(latestDate);
+        
+        if (range === '1m') {
+            limitDate.setMonth(limitDate.getMonth() - 1);
+        } else if (range === '3m') {
+            limitDate.setMonth(limitDate.getMonth() - 3);
+        } else if (range === '6m') {
+            limitDate.setMonth(limitDate.getMonth() - 6);
+        } else if (range === '1y') {
+            limitDate.setFullYear(limitDate.getFullYear() - 1);
+        }
+        
+        return series.filter(point => new Date(point.date) >= limitDate);
+    }
+
+    function downsampleSeries(series, maxPoints = 200) {
+        if (!series || series.length <= maxPoints) return series;
+        const step = Math.ceil(series.length / maxPoints);
+        const result = [];
+        for (let i = 0; i < series.length; i += step) {
+            result.push(series[i]);
+        }
+        if (result[result.length - 1] !== series[series.length - 1]) {
+            result.push(series[series.length - 1]);
+        }
+        return result;
     }
 
     function renderTurbulenceChart(series) {
@@ -1827,12 +1933,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const textColor = isDark ? '#a0aec0' : '#4a5568';
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
         
-        const labels = series.map(x => x.date);
-        const turbSlow = series.map(x => x.turb_slow);
-        const turbFast = series.map(x => x.turb_fast);
-        const slowWarn = series.map(x => x.slow_warn);
-        const slowExtreme = series.map(x => x.slow_extreme);
-        const spxPrices = series.map(x => x.spx);
+        // Filter by selected range
+        let filteredSeries = filterSeriesByRange(series, currentTurbulenceRange);
+        
+        // Downsample if data is too dense
+        filteredSeries = downsampleSeries(filteredSeries, 200);
+        
+        const labels = filteredSeries.map(x => x.date);
+        const turbSlow = filteredSeries.map(x => x.turb_slow);
+        const turbFast = filteredSeries.map(x => x.turb_fast);
+        const slowWarn = filteredSeries.map(x => x.slow_warn);
+        const slowExtreme = filteredSeries.map(x => x.slow_extreme);
+        const spxPrices = filteredSeries.map(x => x.spx);
         
         const ctx = canvas.getContext('2d');
         turbulenceChartInstance = new Chart(ctx, {

@@ -304,6 +304,17 @@ def calculate_market_turbulence():
     vix_series = df_prices["^VIX"]
     spy_sma50 = spy_series.rolling(window=50).mean()
     
+    # Calculate rolling VIX metrics: 252 trading days (1 year)
+    vix_rolling_mean = vix_series.rolling(window=252, min_periods=100).mean()
+    vix_rolling_std = vix_series.rolling(window=252, min_periods=100).std()
+    
+    # Fill NaN values for VIX metrics
+    vix_rolling_mean = vix_rolling_mean.ffill().bfill().fillna(20.0)
+    vix_rolling_std = vix_rolling_std.ffill().bfill().fillna(4.0)
+    vix_dynamic_threshold = vix_rolling_mean + vix_rolling_std
+    # Clip dynamic threshold between 18.0 and 28.0 to prevent extreme values
+    vix_dynamic_threshold = np.clip(vix_dynamic_threshold, 18.0, 28.0)
+    
     turb_records = []
     dates = df_returns.index
     n_assets = len(TURB_TICKERS)
@@ -334,7 +345,9 @@ def calculate_market_turbulence():
             "cov_healthy": cov_healthy,
             "spx_level": float(spy_series.loc[current_date]),
             "spx_sma50": float(spy_sma50.loc[current_date]) if not np.isnan(spy_sma50.loc[current_date]) else float(spy_series.loc[current_date]),
-            "vix_level": float(vix_series.loc[current_date])
+            "vix_level": float(vix_series.loc[current_date]),
+            "vix_rolling_mean": float(vix_rolling_mean.loc[current_date]),
+            "vix_dynamic_threshold": float(vix_dynamic_threshold.loc[current_date])
         })
         
     df_result = pd.DataFrame(turb_records)
@@ -360,7 +373,8 @@ def process_turbulence_output(df_result):
     
     turb_above_warn = bool(latest['turb_slow'] > latest['slow_warn'])
     spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'])
-    vix_complacent = bool(latest['vix_level'] < 25.0)
+    vix_dynamic_thresh = float(latest['vix_dynamic_threshold'])
+    vix_complacent = bool(latest['vix_level'] < vix_dynamic_thresh)
     
     danger_zone_active = bool(turb_above_warn and spx_above_sma50 and vix_complacent)
     
@@ -379,13 +393,61 @@ def process_turbulence_output(df_result):
         "CRITICAL": "#e71d36"
     }
     
+    # Calculate continuous position size for latest
+    slow_warn = latest['slow_warn']
+    slow_extreme = latest['slow_extreme']
+    turb_slow = latest['turb_slow']
+    
+    if slow_extreme > slow_warn:
+        x = (turb_slow - slow_warn) / (slow_extreme - slow_warn)
+    else:
+        x = 0.0
+        
+    if x <= 0:
+        position_size_pct = 100.0
+    elif x < 1:
+        if danger_zone_active:
+            position_size_pct = 100.0 - 50.0 * x
+        else:
+            position_size_pct = 100.0 - 25.0 * x
+    else:
+        # x >= 1
+        if vix_complacent:
+            position_size_pct = max(25.0, 50.0 - 25.0 * (x - 1.0))
+        else:
+            position_size_pct = max(50.0, 75.0 - 25.0 * (x - 1.0))
+            
+    position_size_pct = int(round(position_size_pct))
+    
     chart_series = []
     for _, row in df_result.iterrows():
         t_warn = row['turb_slow'] > row['slow_warn']
         s_above = row['spx_level'] > row['spx_sma50']
-        v_comp = row['vix_level'] < 25.0
+        v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         dz = bool(t_warn and s_above and v_comp)
         
+        # Calculate continuous position size for history
+        h_warn = row['slow_warn']
+        h_extreme = row['slow_extreme']
+        h_turb_slow = row['turb_slow']
+        if h_extreme > h_warn:
+            hx = (h_turb_slow - h_warn) / (h_extreme - h_warn)
+        else:
+            hx = 0.0
+            
+        if hx <= 0:
+            h_pos = 100.0
+        elif hx < 1:
+            if dz:
+                h_pos = 100.0 - 50.0 * hx
+            else:
+                h_pos = 100.0 - 25.0 * hx
+        else:
+            if v_comp:
+                h_pos = max(25.0, 50.0 - 25.0 * (hx - 1.0))
+            else:
+                h_pos = max(50.0, 75.0 - 25.0 * (hx - 1.0))
+                
         chart_series.append({
             "date": row['date'],
             "turb_slow": round(float(row['turb_slow']), 2),
@@ -394,17 +456,54 @@ def process_turbulence_output(df_result):
             "slow_extreme": round(float(row['slow_extreme']), 2),
             "spx": round(float(row['spx_level']), 2),
             "vix": round(float(row['vix_level']), 2),
-            "danger_zone": dz
+            "vix_rolling_mean": round(float(row['vix_rolling_mean']), 2),
+            "vix_dynamic_threshold": round(float(row['vix_dynamic_threshold']), 2),
+            "danger_zone": dz,
+            "position_size_pct": int(round(h_pos))
         })
         
-    position_size_pct = 100
-    if state == "ELEVATED RISK":
-        position_size_pct = 75
-    elif state == "HIGH RISK":
-        position_size_pct = 50
-    elif state == "CRITICAL":
-        position_size_pct = 25
+    # Extract Danger Zone history periods (find contiguous periods of danger_zone = True)
+    dz_periods = []
+    in_period = False
+    start_date = None
+    peak_turb = 0.0
+    
+    for idx, row in df_result.iterrows():
+        t_warn = row['turb_slow'] > row['slow_warn']
+        s_above = row['spx_level'] > row['spx_sma50']
+        v_comp = row['vix_level'] < row['vix_dynamic_threshold']
+        dz = bool(t_warn and s_above and v_comp)
         
+        if dz:
+            if not in_period:
+                in_period = True
+                start_date = row['date']
+                peak_turb = float(row['turb_slow'])
+            else:
+                peak_turb = max(peak_turb, float(row['turb_slow']))
+        else:
+            if in_period:
+                end_date = df_result.iloc[idx-1]['date']
+                dz_periods.append({
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "peak_turb": round(peak_turb, 2),
+                    "duration_days": int((pd.to_datetime(end_date) - pd.to_datetime(start_date)).days) + 1
+                })
+                in_period = False
+                
+    if in_period:
+        end_date = df_result.iloc[-1]['date']
+        dz_periods.append({
+            "start_date": start_date,
+            "end_date": "Present",
+            "peak_turb": round(peak_turb, 2),
+            "duration_days": int((pd.to_datetime(end_date) - pd.to_datetime(start_date)).days) + 1
+        })
+        
+    dz_periods.reverse()
+    danger_zone_history = dz_periods[:10]
+    
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status": {
@@ -427,12 +526,16 @@ def process_turbulence_output(df_result):
             },
             "vix": {
                 "level": round(float(latest['vix_level']), 2),
-                "below_25": vix_complacent
+                "below_25": bool(latest['vix_level'] < 25.0),
+                "dynamic_threshold": round(vix_dynamic_thresh, 2),
+                "rolling_mean": round(float(latest['vix_rolling_mean']), 2),
+                "below_dynamic": vix_complacent
             },
             "divergence": {
                 "active": danger_zone_active
             }
         },
+        "danger_zone_history": danger_zone_history,
         "chart_series": chart_series
     }
     return payload
