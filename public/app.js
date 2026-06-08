@@ -302,9 +302,14 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_current_state: "Risk Regime",
             turb_pos_size: "Suggested Position",
             turb_checklist: "Danger Zone Checklist",
-            turb_cond_dist: "1. Cross-Asset Turbulence Elevated",
-            turb_cond_spx: "2. S&P 500 above 50-day SMA",
-            turb_cond_vix: "3. VIX below dynamic threshold",
+            turb_cond_macro: "1. Macro Turbulence Elevated",
+            turb_cond_sector: "2. Sector Dispersion Elevated",
+            turb_cond_spx: "3. S&P 500 above 50-day SMA",
+            turb_cond_vix: "4. Equity VIX Complacent",
+            turb_cond_move: "5. Bond MOVE Complacent",
+            turb_cond_credit: "6. Credit Spread Complacent",
+            turb_macro_attrib_title: "Macro Risk Attribution",
+            turb_sector_attrib_title: "Sector Dispersion Attribution",
             turb_state_normal_desc: "Turbulence is normal. No structural threat detected.",
             turb_state_elevated_desc: "Turbulence is elevated. Systemic risk is building up.",
             turb_state_high_desc: "Danger Zone active! Divergence between price and structural risk is high.",
@@ -462,10 +467,15 @@ document.addEventListener('DOMContentLoaded', () => {
             turb_subtitle: "基于 Kritzman-Li (2010) 马氏距离跨资产协方差模型，检测大盘高位麻痹期与系统性风险。",
             turb_current_state: "风险状态等级",
             turb_pos_size: "最优推荐仓位",
-            turb_checklist: "Danger Zone 预警三联灯",
-            turb_cond_dist: "1. 跨资产阻尼指数突破警戒线",
-            turb_cond_spx: "2. 标普500指数处于50日均线上方",
-            turb_cond_vix: "3. VIX 波动率低于动态阈值",
+            turb_checklist: "Danger Zone 预警六联灯",
+            turb_cond_macro: "1. 宏观系统湍流超限",
+            turb_cond_sector: "2. 行业离散度超限",
+            turb_cond_spx: "3. 标普500处于50日均线上方",
+            turb_cond_vix: "4. 股市 VIX 隐含波动率自满",
+            turb_cond_move: "5. 债市 MOVE 隐含波动率自满",
+            turb_cond_credit: "6. 信用流动性风险自满",
+            turb_macro_attrib_title: "宏观系统风险源诊断",
+            turb_sector_attrib_title: "行业轮动分散风险源诊断",
             turb_state_normal_desc: "跨资产联动模式正常。未检测到明显的系统性结构威胁。",
             turb_state_elevated_desc: "跨资产协方差异常。联动结构偏离正常态，结构性风险正在蓄积。",
             turb_state_high_desc: "Danger Zone 预警信号已激活！股价高位但底层协方差已高度异常，市场进入麻痹窗口。",
@@ -636,7 +646,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initTabs();
     initSelectors();
-    loadOpportunities(); // Load default view
+    
+    // Support hash-based routing for initial tab selection
+    const initialTab = window.location.hash.replace('#', '');
+    const validTabs = ['opportunities', 'confluences', 'insider', 'sectors', 'reddit', 'watchlist', 'turbulence'];
+    if (validTabs.includes(initialTab)) {
+        const targetBtn = document.querySelector(`.nav-btn[data-tab="${initialTab}"]`);
+        if (targetBtn) {
+            // Trigger click programmatically to load the correct tab
+            targetBtn.click();
+        } else {
+            loadOpportunities();
+        }
+    } else {
+        loadOpportunities(); // Load default view
+    }
 
     // 1. Navigation & Tab Switching
     function initTabs() {
@@ -1743,9 +1767,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const status = payload.status;
-        const latestTurb = status.turbulence;
+        const latestMacro = status.macro_turbulence;
+        const latestSector = status.sector_dispersion;
         const latestSpx = status.spx;
         const latestVix = status.vix;
+        const latestMove = status.move;
+        const latestCredit = status.credit;
         
         // 1. Update Regime Card
         const stateText = document.getElementById('turb-state-text');
@@ -1775,30 +1802,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const posVal = document.getElementById('turb-pos-val');
         const posBar = document.getElementById('turb-pos-bar');
         
-        if (posVal) posVal.textContent = status.position_size_pct;
+        if (posVal) posVal.textContent = `${status.position_size_pct}%`;
         if (posBar) {
             posBar.style.width = `${status.position_size_pct}%`;
             posBar.style.backgroundColor = status.state_color;
         }
         
-        // 3. Update Checklist
-        const turbIcon = document.getElementById('check-icon-turb');
-        const turbVal = document.getElementById('check-val-turb');
+        // 3. Update Checklist (6 items)
+        const macroIcon = document.getElementById('check-icon-macro');
+        const macroVal = document.getElementById('check-val-macro');
+        const sectorIcon = document.getElementById('check-icon-sector');
+        const sectorVal = document.getElementById('check-val-sector');
         const spxIcon = document.getElementById('check-icon-spx');
         const spxVal = document.getElementById('check-val-spx');
         const vixIcon = document.getElementById('check-icon-vix');
         const vixVal = document.getElementById('check-val-vix');
+        const moveIcon = document.getElementById('check-icon-move');
+        const moveVal = document.getElementById('check-val-move');
+        const creditIcon = document.getElementById('check-icon-credit');
+        const creditVal = document.getElementById('check-val-credit');
         
-        const turbMet = latestTurb.slow > latestTurb.warning_threshold;
+        const macroMet = latestMacro.slow > latestMacro.warning_threshold;
+        const sectorMet = latestSector.slow > latestSector.warning_threshold;
         const spxMet = latestSpx.above_sma50;
-        const vixMet = latestVix.hasOwnProperty('below_dynamic') ? latestVix.below_dynamic : latestVix.below_25;
-        const vixThreshVal = latestVix.hasOwnProperty('dynamic_threshold') ? latestVix.dynamic_threshold : 25.0;
+        const vixMet = latestVix.below_dynamic;
+        const moveMet = latestMove.below_dynamic;
+        const creditMet = latestCredit.below_dynamic;
         
-        if (turbVal) turbVal.textContent = `${latestTurb.slow.toFixed(2)} (vs ${latestTurb.warning_threshold.toFixed(2)})`;
-        if (turbIcon) {
-            turbIcon.outerHTML = turbMet 
-                ? `<i id="check-icon-turb" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
-                : `<i id="check-icon-turb" class="check-icon unmet" data-lucide="circle"></i>`;
+        if (macroVal) macroVal.textContent = `${latestMacro.slow.toFixed(2)} (vs ${latestMacro.warning_threshold.toFixed(2)})`;
+        if (macroIcon) {
+            macroIcon.outerHTML = macroMet 
+                ? `<i id="check-icon-macro" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
+                : `<i id="check-icon-macro" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        if (sectorVal) sectorVal.textContent = `${latestSector.slow.toFixed(2)} (vs ${latestSector.warning_threshold.toFixed(2)})`;
+        if (sectorIcon) {
+            sectorIcon.outerHTML = sectorMet 
+                ? `<i id="check-icon-sector" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
+                : `<i id="check-icon-sector" class="check-icon unmet" data-lucide="circle"></i>`;
         }
         
         if (spxVal) spxVal.textContent = `${latestSpx.level.toFixed(1)} (vs SMA50 ${latestSpx.sma50.toFixed(1)})`;
@@ -1808,11 +1850,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `<i id="check-icon-spx" class="check-icon unmet" data-lucide="circle"></i>`;
         }
         
-        if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(2)} (vs ${vixThreshVal.toFixed(1)})`;
+        if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(1)} (vs ${latestVix.dynamic_threshold.toFixed(1)})`;
         if (vixIcon) {
             vixIcon.outerHTML = vixMet 
                 ? `<i id="check-icon-vix" class="check-icon met" data-lucide="check-circle-2"></i>`
                 : `<i id="check-icon-vix" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        if (moveVal) moveVal.textContent = `${latestMove.level.toFixed(1)} (vs ${latestMove.dynamic_threshold.toFixed(1)})`;
+        if (moveIcon) {
+            moveIcon.outerHTML = moveMet 
+                ? `<i id="check-icon-move" class="check-icon met" data-lucide="check-circle-2"></i>`
+                : `<i id="check-icon-move" class="check-icon unmet" data-lucide="circle"></i>`;
+        }
+        
+        if (creditVal) creditVal.textContent = `${latestCredit.level.toFixed(3)} (vs ${latestCredit.dynamic_threshold.toFixed(3)})`;
+        if (creditIcon) {
+            creditIcon.outerHTML = creditMet 
+                ? `<i id="check-icon-credit" class="check-icon met" data-lucide="check-circle-2"></i>`
+                : `<i id="check-icon-credit" class="check-icon unmet" data-lucide="circle"></i>`;
         }
         
         // Verdict Banner
@@ -1828,6 +1884,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 verdictText.textContent = translations[activeLang].turb_verdict_inactive;
             }
         }
+        
+        // 3.5 Render Risk Attribution Lists
+        const renderAttributionList = (containerId, contributors) => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (!contributors || contributors.length === 0) {
+                container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); padding: 8px 0;">No diagnostic data available.</div>`;
+                return;
+            }
+            container.innerHTML = contributors.map(item => {
+                const isPositive = item.contribution >= 0;
+                const barColor = isPositive ? 'linear-gradient(90deg, #e71d36, #ff9f1c)' : 'linear-gradient(90deg, #00b4d8, #90e0ef)';
+                const returnText = item.return >= 0 ? `+${(item.return * 100).toFixed(2)}%` : `${(item.return * 100).toFixed(2)}%`;
+                const returnColor = item.return >= 0 ? 'var(--positive)' : 'var(--negative)';
+                
+                return `
+                    <div class="attrib-item" style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 500; color: var(--text-primary);">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--brand-gold);">${item.ticker}</span>
+                                <span style="font-family: var(--font-mono); font-size: 0.65rem; color: ${returnColor};">(${returnText})</span>
+                            </div>
+                            <span style="font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${item.pct.toFixed(1)}%</span>
+                        </div>
+                        <div style="width: 100%; height: 6px; background: var(--surface-muted); border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${Math.min(100, item.pct).toFixed(1)}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.6s ease-out;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+        
+        renderAttributionList('macro-attrib-list', status.macro_contributors);
+        renderAttributionList('sector-attrib-list', status.sector_contributors);
         
         // Update data updated at time
         const updatedAtEl = document.getElementById('turb-updated-at');
@@ -1882,97 +1972,161 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 4. Update Regime Interpretation & Actionable Guidelines Card
+        // 4. Update Regime Interpretation & Actionable Guidelines Card (3-Column Playbook)
         const tipsCard = document.getElementById('turb-tips-card');
         if (tipsCard) {
             const state = status.state;
-            let titleText = activeLang === 'zh' ? '当前风险状态解读与交易指南' : 'Regime Interpretation & Actionable Guidelines';
+            let titleText = activeLang === 'zh' ? '当前风险状态解读与战术对冲指南' : 'Regime Interpretation & Tactical Hedging Playbook';
             let subtitleText = activeLang === 'zh' ? '基于当前市场动态的量化专家系统分析与战术性配仓建议。' : 'Expert-system analysis and tactical rules-based allocation suggestions based on current market dynamics.';
-            let analysisHeader = activeLang === 'zh' ? '市场状态分析' : 'Market Regime Analysis';
-            let actionHeader = activeLang === 'zh' ? '战术行动方案' : 'Tactical Action Plan';
+            let analysisHeader = activeLang === 'zh' ? '市场状态诊断' : 'Market Regime Analysis';
+            let allocationHeader = activeLang === 'zh' ? '1. 资产配置比例' : '1. Portfolio Allocation';
+            let rotationHeader = activeLang === 'zh' ? '2. 行业轮动防御' : '2. Sector Rotation';
+            let hedgingHeader = activeLang === 'zh' ? '3. 战术对冲对策' : '3. Option Hedging';
             
             let analysisContent = '';
-            let actionListHtml = '';
+            let allocHtml = '';
+            let rotHtml = '';
+            let hedgeHtml = '';
             
             if (state === 'NORMAL') {
                 analysisContent = activeLang === 'zh' 
                     ? '<strong>当前状态：常态化（NORMAL）</strong>。大类资产之间的收益率协方差结构保持稳定，传统资产分散化配置模型（如 60/40 股债平衡、风险平价）在此阶段高度有效。标普500（SPY）指数价格呈现健康的上升通道趋势，且 VIX 指数处于正常或较低的历史分位数。未检测到系统性资产重组或共振下跌迹象。'
                     : '<strong>Current Regime: NORMAL</strong>. Covariance structures across major asset classes are stable. Traditional diversification models (e.g. 60/40 balance, risk-parity) are highly effective in this phase. The S&P 500 (SPY) tracks a healthy upward trend, and VIX is in a normal or low historical range. No signs of systemic correlation fracture detected.';
                 
-                actionListHtml = activeLang === 'zh'
-                    ? `<li>维持满额多头风险敞口，建议仓位保持 <strong>100%</strong>。</li>
-                       <li>遵循日常的战略资产配置（SAA），无需进行任何额外的期权或反向基金对冲。</li>
-                       <li>可积极参与市场贝塔（Beta）行情，或在「技术扫描器」中寻找强势个股的突破与复利复合增长机会。</li>`
-                    : `<li>Maintain full risk asset exposure; recommended position size at <strong>100%</strong>.</li>
-                       <li>Follow standard Strategic Asset Allocation (SAA); no extra hedging or inverse products needed.</li>
-                       <li>Actively capture market Beta; search the Technical Scanner for breakout or compounder opportunities.</li>`;
+                allocHtml = activeLang === 'zh'
+                    ? `<li>权益敞口：<strong>100% (满仓)</strong></li>
+                       <li>现金留存：<strong>0%</strong></li>
+                       <li>战术动作：维持标准战略资产配置，无需保留额外防御性现金。</li>`
+                    : `<li>Equities Exposure: <strong>100%</strong></li>
+                       <li>Cash/Risk-Free Allocation: <strong>0%</strong></li>
+                       <li>Action: Maintain full risk asset exposure; follow standard Strategic Asset Allocation (SAA).</li>`;
+                       
+                rotHtml = activeLang === 'zh'
+                    ? `<li>行业偏向：均衡配置或适度偏向成长板块（科技 XLK、非必需消费 XLY）</li>
+                       <li>回避行业：无特定回避行业。</li>`
+                    : `<li>Sector Tilt: Standard growth-defensive balance or active growth (XLK, XLY)</li>
+                       <li>Avoid: No specific exclusions; market broad breadth is healthy.</li>`;
+                       
+                hedgeHtml = activeLang === 'zh'
+                    ? `<li>期权对冲比例：<strong>0% (无对冲)</strong></li>
+                       <li>对冲建议：当前无需期权对冲。尽管 VIX 便宜，但在低湍流环境下持有对冲会有正的保费时间损耗。</li>`
+                    : `<li>Hedging Ratio: <strong>0% (None)</strong></li>
+                       <li>Action: No options hedges needed. While VIX is low, buying protective options under low systemic stress will lead to unnecessary theta decay.</li>`;
+                       
             } else if (state === 'ELEVATED RISK') {
                 analysisContent = activeLang === 'zh'
-                    ? '<strong>当前状态：风险抬升（ELEVATED RISK）</strong>。跨资产湍流指数（慢速线）已突破 95% 历史警戒线，表明资产间收益相关性偏离正常模式，底层系统性压力正在加速积聚。目前快速湍流线亦高企，表明市场正在承受强烈的资产重叠共振冲击，资产分散化的保护效应正在迅速下降。'
-                    : '<strong>Current Regime: ELEVATED RISK</strong>. The Slow Turbulence Index has crossed the 95th percentile warning line, indicating that asset return correlations are deviating from historical norms. A sharp rise in the Fast Turbulence Index confirms an immediate cross-asset correlation shock, leading to a quick decay in diversification protection.';
+                    ? '<strong>当前状态：风险抬升（ELEVATED RISK）</strong>。跨资产湍流指数（慢速线）或行业离散度指数已突破 95% 历史警戒线，表明资产间收益相关性偏离正常模式，底层系统性压力正在加速积聚。目前快速湍流线亦高企，表明市场正在承受强烈的资产重叠共振冲击，资产分散化的保护效应正在迅速下降。'
+                    : '<strong>Current Regime: ELEVATED RISK</strong>. The Slow Turbulence Index or Sector Dispersion has crossed the 95th percentile warning line, indicating that asset return correlations are deviating from historical norms. A sharp rise in the Fast Turbulence Index confirms an immediate cross-asset correlation shock, leading to a quick decay in diversification protection.';
                 
-                actionListHtml = activeLang === 'zh'
-                    ? `<li>限制投资组合的交易杠杆，提高现金比率或资产防御性。</li>
-                       <li>传统多元化策略开始弱化（股债同跌风险增加），应降低对纯债券对冲的依赖，增配低 Beta 或抗通胀资产。</li>
-                       <li>战术上收敛风控，避免盲目追高，建议缩减估值过高、波动剧烈的投机性高 Beta 多头头寸。</li>`
-                    : `<li>Limit portfolio leverage; raise cash buffers or defensive assets.</li>
-                       <li>Traditional diversification weakens (bond-equity correlation rises); reduce reliance on pure bond hedging and allocate to low-beta assets.</li>
-                       <li>Tighten stop-losses; avoid chasing high valuations and prune speculative high-beta growth holdings.</li>`;
+                allocHtml = activeLang === 'zh'
+                    ? `<li>权益敞口：<strong>75%</strong></li>
+                       <li>现金留存：<strong>25% (防守防御)</strong></li>
+                       <li>战术动作：适度收回部分多头敞口，提防潜在的高位震荡或回撤。</li>`
+                    : `<li>Equities Exposure: <strong>75%</strong></li>
+                       <li>Cash/Risk-Free Allocation: <strong>25%</strong></li>
+                       <li>Action: Raise cash buffers; scale down slightly to protect capital.</li>`;
+                       
+                rotHtml = activeLang === 'zh'
+                    ? `<li>行业偏向：偏向低 Beta 防御性板块（必需消费 XLP、公用事业 XLU、医疗保健 XLV）</li>
+                       <li>回避行业：缩减投机性高估值成长股，以及高杠杆小盘股。</li>`
+                    : `<li>Sector Tilt: Low-beta defensives (XLP, XLU, XLV)</li>
+                       <li>Avoid: Speculative high-valuation growth names, highly leveraged micro/small caps.</li>`;
+                       
+                hedgeHtml = activeLang === 'zh'
+                    ? `<li>期权对冲比例：<strong>10% 名义价值对冲</strong></li>
+                       <li>对冲建议：密切监视隐含波动率，可以考虑在当前较低保费水平下，布局少量远期虚值 (OTM -5%) 的标普看跌期权。</li>`
+                    : `<li>Hedging Ratio: <strong>10% Notional Value</strong></li>
+                       <li>Action: Monitor options market. VIX level is low. Consider purchasing cheap OTM (-5% strike) protective puts to hedge tail risk.</li>`;
+                       
             } else if (state === 'HIGH RISK') {
                 analysisContent = activeLang === 'zh'
-                    ? '<strong>当前状态：高风险（HIGH RISK - Danger Zone 预警激活）</strong>。系统已触发模型置信度最高的 <strong>Danger Zone 警告</strong>！市场呈现典型的“牛市末自满”特征——SPY 仍运行于50日均线上方（买盘假象），VIX 仍低于滚动动态阈值（市场自满、缺乏保费买盘），然而大类资产湍流指数已突破历史警戒线，底层结构严重分裂。这往往是暴风雨来临前的典型状态。'
-                    : '<strong>Current Regime: HIGH RISK (Danger Zone Active)</strong>. The system has triggered a high-confidence **Danger Zone alert**! The market is showcasing a classic "complacent bull extension" signature: SPY is above its 50-day SMA (buying momentum) and VIX is below the dynamic threshold (market complacency), yet cross-asset turbulence has breached the warning level. This is a typical pre-drawdown signature.';
+                    ? '<strong>当前状态：高风险（HIGH RISK - Danger Zone 预警激活）</strong>。系统已触发模型置信度最高的 <strong>Danger Zone 警告</strong>！市场呈现典型的“牛市末自满”特征——SPY 仍运行于50日均线上方（买盘假象），VIX/MOVE 仍低于滚动动态阈值（市场自满、缺乏保费买盘），然而大类资产湍流指数已突破历史警戒线，底层结构严重分裂。这往往是暴风雨来临前的典型状态。'
+                    : '<strong>Current Regime: HIGH RISK (Danger Zone Active)</strong>. The system has triggered a high-confidence **Danger Zone alert**! The market is showcasing a classic "complacent bull extension" signature: SPY is above its 50-day SMA (buying momentum) and VIX/MOVE is below the dynamic threshold (market complacency), yet cross-asset turbulence has breached the warning level. This is a typical pre-drawdown signature.';
                 
-                actionListHtml = activeLang === 'zh'
-                    ? `<li><strong>坚决执行防御性降仓</strong>：建议将风险资产仓位限制在 <strong>50%</strong> 左右，主动回收流动性。</li>
-                       <li><strong>部署衍生品保护</strong>：买入 SPY 或大盘指数的看跌期权（Put Option），以低成本锁定既得利润。</li>
-                       <li>由于跨资产协方差异常，传统“防守型板块”或债券可能无法有效对冲股票跌势，应提高硬货币或绝对收益策略比重。</li>`
-                    : `<li>**Enforce defensive positioning**: scale down risk assets to **50%** and raise cash liquidity.</li>
-                       <li>**Deploy tail-risk hedges**: buy protective index puts (SPY) to cost-effectively lock in gains.</li>
-                       <li>As covariance fractures, traditional defensive sectors or bonds might fall together with stocks; prioritize hard cash or absolute-return strategies.</li>`;
+                allocHtml = activeLang === 'zh'
+                    ? `<li>权益敞口：<strong>50%</strong></li>
+                       <li>现金留存：<strong>50% (强制对半)</strong></li>
+                       <li>战术动作：强制收回流动性，半仓过冬，大幅提升防御性。</li>`
+                    : `<li>Equities Exposure: <strong>50%</strong></li>
+                       <li>Cash/Risk-Free Allocation: <strong>50%</strong></li>
+                       <li>Action: Enforce cash conservation; scale down equities to 50%.</li>`;
+                       
+                rotHtml = activeLang === 'zh'
+                    ? `<li>行业偏向：全面调入防御行业（必需消费 XLP、公用事业 XLU）</li>
+                       <li>回避行业：周期性消费股 (XLY)、金融股 (XLF) 及高杠杆行业。</li>`
+                    : `<li>Sector Tilt: Allocate to low-beta defensives (XLP, XLU)</li>
+                       <li>Avoid: Consumer Discretionary (XLY), Financials (XLF), high leverage.</li>`;
+                      
+                const putStrike = Math.round(latestSpx.level * 0.97);
+                hedgeHtml = activeLang === 'zh'
+                    ? `<li>期权对冲比例：<strong>30% 名义价值对冲</strong></li>
+                       <li>对冲建议：买入 <strong>30-45 天到期、行权价为 $${putStrike} (SPY/SPX -3% ATM)</strong> 的 SPY Protective Put。当前 VIX ($${latestVix.level.toFixed(1)}) 极低，对冲极其便宜。</li>`
+                    : `<li>Hedging Ratio: <strong>30% Notional Value</strong></li>
+                       <li>Action: Buy <strong>30-45 DTE SPY Protective Put</strong> at strike **$${putStrike}** (SPY -3% ATM). Equity options are cheap as VIX is low ($${latestVix.level.toFixed(1)}).</li>`;
+                       
             } else if (state === 'CRITICAL') {
                 analysisContent = activeLang === 'zh'
-                    ? '<strong>当前状态：极端风险（CRITICAL - 崩溃警告）</strong>。跨资产慢速湍流指数已突破 99% 的极端历史上限，且快速湍流仍在极端冲顶。大类资产的协方差出现破坏性坍塌，相关性在短期内极速趋近于 1（所有资产同向暴跌风险极大）。一旦市场流动性受阻，极易发生无差别抛售踩踏。'
-                    : '<strong>Current Regime: CRITICAL (Crash Warning)</strong>. The Slow Turbulence Index has breached the 99th percentile extreme historical limit, with the fast line peaking. Covariance structures have collapsed, and correlations are rapidly converging to 1. An imminent, indiscriminate liquidity sell-off is highly probable if systemic stress persists.';
+                    ? '<strong>当前状态：极端风险（CRITICAL - 崩溃警告）</strong>。慢速宏观系统湍流已突破 99% 的极端历史上限。大类资产的协方差出现破坏性坍塌，相关性在短期内极速趋近于 1（所有资产同向暴跌风险极大）。不管 VIX 指数是否已经暴起，此状态下金融系统流动性处于极度脆弱边缘，极易发生无差别抛售踩踏。'
+                    : '<strong>Current Regime: CRITICAL (Crash Warning)</strong>. The Slow Macro Turbulence has breached the 99th percentile extreme historical limit. Covariance structures have collapsed, and correlations are rapidly converging to 1. Regardless of VIX panic level, market liquidity is extremely fragile, and an indiscriminate liquidity sell-off is highly probable.';
                 
-                actionListHtml = activeLang === 'zh'
-                    ? `<li><strong>最大限度回撤风险风险头寸</strong>：建议将资产仓位限制在 <strong>25%</strong> 的最低防御线，全面退守现金与超短期国债。</li>
-                       <li><strong>警惕相关性同收敛风险</strong>：任何依靠分散化资产组合的交易模型（如 Risk Parity、固定比例平衡仓位）都可能面临灾难性的历史回撤。</li>
-                       <li><strong>保持右侧操作思路</strong>：在此阶段坚决禁止任何“抄底”行为，耐心等待快速与慢速湍流线明确跌回至警戒线以下再做部署。</li>`
-                    : `<li>**Drastically scale down to maximum defense**: reduce position size to **25%**, parking capital in cash and short-term bills.</li>
-                       <li>**Beware of correlation convergence**: balanced models (e.g. Risk Parity) are highly susceptible to historic drawdowns in this regime.</li>
-                       <li>**Wait for confirmation**: strictly avoid catching falling knives; stay on the sidelines until both fast/slow turbulence indexes fall back below warning lines.</li>`;
+                allocHtml = activeLang === 'zh'
+                    ? `<li>权益敞口：<strong>25% (最低限度)</strong></li>
+                       <li>现金留存：<strong>75%</strong></li>
+                       <li>战术动作：只保留底仓，全面退守无风险资产（短期国债/现金）。</li>`
+                    : `<li>Equities Exposure: <strong>25% (Minimum)</strong></li>
+                       <li>Cash/Ultra-Short Bills: <strong>75%</strong></li>
+                       <li>Action: Reduce exposure to minimum; park capital in short-term bills.</li>`;
+                      
+                rotHtml = activeLang === 'zh'
+                    ? `<li>行业动作：忽略任何板块轮动，传统“防御板块”可能会与成长股同跌。</li>
+                       <li>战术动作：维持高流动性现金，避免承接任何下落的飞刀。</li>`
+                    : `<li>Sector Tilt: Ignore sector rotations; defensives will fall with growth in liquidity squeeze.</li>
+                       <li>Action: Stay in cash; strictly avoid catching falling knives.</li>`;
+                      
+                hedgeHtml = activeLang === 'zh'
+                    ? `<li>对冲措施：<strong>多头大幅平仓为主，辅以尾部风险对冲</strong></li>
+                       <li>对冲建议：直接通过股票平仓锁定流动性，此时期权保费（VIX $${latestVix.level.toFixed(1)}）过高，买入 Put 已极不划算。</li>`
+                    : `<li>Hedging Ratio: <strong>Equities Pruning over Options</strong></li>
+                       <li>Action: Lock in liquidity by selling shares; buying puts now is expensive due to high volatility (VIX $${latestVix.level.toFixed(1)}).</li>`;
             }
             
-            // Set dynamic border color matching the regime state
             tipsCard.style.borderLeft = `4px solid ${status.state_color}`;
-            
             tipsCard.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
                     <div class="tips-icon-wrap" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--gold-wash); color: var(--brand-gold);">
-                        <i data-lucide="compass" style="width: 18px; height: 18px;"></i>
+                        <i data-lucide="shield-alert" style="width: 18px; height: 18px; color: ${status.state_color};"></i>
                     </div>
                     <div>
                         <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; font-family: var(--font-display); color: var(--text-primary);">${titleText}</h3>
                         <span style="font-size: 0.7rem; color: var(--text-muted);">${subtitleText}</span>
                     </div>
                 </div>
-                <div class="tips-content-grid">
-                    <div class="tips-interpretation">
-                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${analysisHeader}</h4>
-                        <div style="font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary);">${analysisContent}</div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${analysisHeader}</h4>
+                    <div style="font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary);">${analysisContent}</div>
+                </div>
+
+                <div class="tips-content-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
+                    <div class="playbook-alloc">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${allocationHeader}</h4>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.7; color: var(--text-secondary);">${allocHtml}</ul>
                     </div>
-                    <div class="tips-guidelines">
-                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${actionHeader}</h4>
-                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.7; color: var(--text-secondary);">${actionListHtml}</ul>
+                    <div class="playbook-rot">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${rotationHeader}</h4>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.7; color: var(--text-secondary);">${rotHtml}</ul>
+                    </div>
+                    <div class="playbook-hedge">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${hedgingHeader}</h4>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.7; color: var(--text-secondary);">${hedgeHtml}</ul>
                     </div>
                 </div>
             `;
         }
-
+        
         lucide.createIcons(); // Instantly compile dynamic Lucide tags
         
-        // 4. Render Chart
+        // 5. Render Chart
         renderTurbulenceChart(payload.chart_series);
     }
 
@@ -2030,6 +2184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = filteredSeries.map(x => x.date);
         const turbSlow = filteredSeries.map(x => x.turb_slow);
         const turbFast = filteredSeries.map(x => x.turb_fast);
+        const sectorSlow = filteredSeries.map(x => x.sector_slow);
         const slowWarn = filteredSeries.map(x => x.slow_warn);
         const slowExtreme = filteredSeries.map(x => x.slow_extreme);
         const spxPrices = filteredSeries.map(x => x.spx);
@@ -2041,7 +2196,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: labels,
                 datasets: [
                     {
-                        label: activeLang === 'zh' ? '慢速湍流指数 (5d EMA)' : 'Slow Turbulence (5d EMA)',
+                        label: activeLang === 'zh' ? '宏观系统阻尼 (5d EMA)' : 'Slow Macro Turbulence (5d EMA)',
                         data: turbSlow,
                         borderColor: isDark ? '#d4c196' : '#c5b086', // Brand gold matching ledger
                         borderWidth: 2,
@@ -2050,7 +2205,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         yAxisID: 'y'
                     },
                     {
-                        label: activeLang === 'zh' ? '快速湍流指数 (2d EMA)' : 'Fast Turbulence (2d EMA)',
+                        label: activeLang === 'zh' ? '行业分散度 (5d EMA)' : 'Slow Sector Dispersion (5d EMA)',
+                        data: sectorSlow,
+                        borderColor: '#06b6d4', // Teal/cyan
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: activeLang === 'zh' ? '快速系统阻尼 (2d EMA)' : 'Fast Macro Turbulence (2d EMA)',
                         data: turbFast,
                         borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)',
                         borderWidth: 1,
@@ -2059,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         yAxisID: 'y'
                     },
                     {
-                        label: activeLang === 'zh' ? '警戒阈值 (95%)' : 'Warning Threshold (95%)',
+                        label: activeLang === 'zh' ? '宏观警戒阈值 (95%)' : 'Macro Warning Threshold (95%)',
                         data: slowWarn,
                         borderColor: '#ff9f1c', // Vibrant warning orange
                         borderWidth: 1.5,
@@ -2068,7 +2233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         yAxisID: 'y'
                     },
                     {
-                        label: activeLang === 'zh' ? '极端风险阈值 (99%)' : 'Extreme Threshold (99%)',
+                        label: activeLang === 'zh' ? '宏观极端阈值 (99%)' : 'Macro Extreme Threshold (99%)',
                         data: slowExtreme,
                         borderColor: '#e71d36', // Bright red
                         borderWidth: 1.5,
@@ -2115,7 +2280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         title: {
                             display: true,
-                            text: activeLang === 'zh' ? '湍流指数 (马氏距离)' : 'Turbulence Score',
+                            text: activeLang === 'zh' ? '阻尼与离散指数' : 'Turbulence & Dispersion Score',
                             color: textColor,
                             font: {
                                 size: 11

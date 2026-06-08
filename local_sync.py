@@ -276,16 +276,12 @@ def sync_reddit():
     except Exception as e:
         print("Failed to sync Reddit sentiment after retries:", e)
 
-TURB_TICKERS = [
-    "XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU", "XLRE", "XLC",
-    "TLT", "IEF", "SHY",
-    "GLD", "DBC",
-    "EFA", "EEM"
-]
+MACRO_TICKERS = ["SPY", "IWM", "EFA", "EEM", "TLT", "IEF", "HYG", "UUP", "GLD", "DBC"]
+SECTOR_TICKERS = ["XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU", "XLRE", "XLC"]
 
 def calculate_market_turbulence():
-    print("Fetching historical data for 18 ETFs + SPY + VIX...")
-    all_tickers = TURB_TICKERS + ["SPY", "^VIX"]
+    print("Fetching historical data for Macro + Sector ETFs + Volatility indexes...")
+    all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD"]))
     
     def do_download():
         df = yf.download(all_tickers, period="3y", progress=False)
@@ -299,91 +295,161 @@ def calculate_market_turbulence():
     df_prices = retry_with_backoff(do_download)
     df_prices = df_prices.ffill().bfill().dropna()
     
-    df_returns = df_prices[TURB_TICKERS].pct_change().dropna()
+    df_returns_macro = df_prices[MACRO_TICKERS].pct_change().dropna()
+    df_returns_sector = df_prices[SECTOR_TICKERS].pct_change().dropna()
+    
     spy_series = df_prices["SPY"]
     vix_series = df_prices["^VIX"]
+    move_series = df_prices["^MOVE"]
+    lqd_series = df_prices["LQD"]
+    hyg_series = df_prices["HYG"]
+    
     spy_sma50 = spy_series.rolling(window=50).mean()
     
-    # Calculate rolling VIX metrics: 252 trading days (1 year)
+    # Calculate rolling VIX metrics
     vix_rolling_mean = vix_series.rolling(window=252, min_periods=100).mean()
     vix_rolling_std = vix_series.rolling(window=252, min_periods=100).std()
-    
-    # Fill NaN values for VIX metrics
     vix_rolling_mean = vix_rolling_mean.ffill().bfill().fillna(20.0)
     vix_rolling_std = vix_rolling_std.ffill().bfill().fillna(4.0)
-    vix_dynamic_threshold = vix_rolling_mean + vix_rolling_std
-    # Clip dynamic threshold between 18.0 and 28.0 to prevent extreme values
-    vix_dynamic_threshold = np.clip(vix_dynamic_threshold, 18.0, 28.0)
+    vix_dynamic_threshold = np.clip(vix_rolling_mean + vix_rolling_std, 18.0, 28.0)
+    
+    # Calculate rolling MOVE metrics
+    move_rolling_mean = move_series.rolling(window=252, min_periods=100).mean()
+    move_rolling_std = move_series.rolling(window=252, min_periods=100).std()
+    move_rolling_mean = move_rolling_mean.ffill().bfill().fillna(80.0)
+    move_rolling_std = move_rolling_std.ffill().bfill().fillna(15.0)
+    move_dynamic_threshold = np.clip(move_rolling_mean + move_rolling_std, 70.0, 120.0)
+    
+    # Calculate Credit Ratio (LQD / HYG)
+    credit_ratio = lqd_series / hyg_series
+    credit_rolling_mean = credit_ratio.rolling(window=252, min_periods=100).mean()
+    credit_rolling_std = credit_ratio.rolling(window=252, min_periods=100).std()
+    credit_rolling_mean = credit_rolling_mean.ffill().bfill().fillna(1.35)
+    credit_rolling_std = credit_rolling_std.ffill().bfill().fillna(0.05)
+    credit_dynamic_threshold = credit_rolling_mean + credit_rolling_std
+    
+    dates = df_returns_macro.index.intersection(df_returns_sector.index)
+    df_returns_macro = df_returns_macro.loc[dates]
+    df_returns_sector = df_returns_sector.loc[dates]
     
     turb_records = []
-    dates = df_returns.index
-    n_assets = len(TURB_TICKERS)
+    n_macro = len(MACRO_TICKERS)
+    n_sector = len(SECTOR_TICKERS)
     
-    for i in range(252, len(df_returns)):
+    for i in range(252, len(dates)):
         current_date = dates[i]
-        r_t = df_returns.iloc[i].values
-        history = df_returns.iloc[i-252:i]
-        mu = history.mean().values
-        cov = history.cov().values
         
-        # Calculate condition number of covariance matrix
-        cond_num = np.linalg.cond(cov)
-        cov_healthy = bool(cond_num < 1000)
+        # 1. Macro calculation
+        r_macro = df_returns_macro.iloc[i].values
+        history_macro = df_returns_macro.iloc[i-252:i]
+        mu_macro = history_macro.mean().values
+        cov_macro = history_macro.cov().values
         
+        cond_macro = np.linalg.cond(cov_macro)
+        cov_healthy_macro = bool(cond_macro < 1000)
+        
+        # 2. Sector calculation
+        r_sector = df_returns_sector.iloc[i].values
+        history_sector = df_returns_sector.iloc[i-252:i]
+        mu_sector = history_sector.mean().values
+        cov_sector = history_sector.cov().values
+        
+        cond_sector = np.linalg.cond(cov_sector)
+        cov_healthy_sector = bool(cond_sector < 1000)
+        
+        # Calculate Macro MD and contributions
         try:
-            cov_inv = np.linalg.pinv(cov)
-            diff = r_t - mu
-            d_t = float(diff.T @ cov_inv @ diff) / n_assets
-        except Exception as e:
-            d_t = np.nan
-            cov_healthy = False
+            cov_inv_macro = np.linalg.pinv(cov_macro)
+            diff_macro = r_macro - mu_macro
+            d_macro = float(diff_macro.T @ cov_inv_macro @ diff_macro) / n_macro
+            w_macro = cov_inv_macro @ diff_macro
+            contribs_macro = (diff_macro * w_macro) / n_macro
+        except:
+            d_macro = np.nan
+            contribs_macro = np.zeros(n_macro)
+            cov_healthy_macro = False
             
+        # Calculate Sector MD and contributions
+        try:
+            cov_inv_sector = np.linalg.pinv(cov_sector)
+            diff_sector = r_sector - mu_sector
+            d_sector = float(diff_sector.T @ cov_inv_sector @ diff_sector) / n_sector
+            w_sector = cov_inv_sector @ diff_sector
+            contribs_sector = (diff_sector * w_sector) / n_sector
+        except:
+            d_sector = np.nan
+            contribs_sector = np.zeros(n_sector)
+            cov_healthy_sector = False
+            
+        macro_contrib_dict = {ticker: float(val) for ticker, val in zip(MACRO_TICKERS, contribs_macro)}
+        sector_contrib_dict = {ticker: float(val) for ticker, val in zip(SECTOR_TICKERS, contribs_sector)}
+        
+        macro_ret_dict = {ticker: float(val) for ticker, val in zip(MACRO_TICKERS, r_macro)}
+        sector_ret_dict = {ticker: float(val) for ticker, val in zip(SECTOR_TICKERS, r_sector)}
+        
         turb_records.append({
             "date": current_date.strftime("%Y-%m-%d"),
-            "turb_raw": d_t,
-            "cov_condition_number": float(cond_num) if not np.isinf(cond_num) and not np.isnan(cond_num) else 999999.0,
-            "cov_healthy": cov_healthy,
+            "turb_macro_raw": d_macro,
+            "turb_sector_raw": d_sector,
+            "cov_cond_macro": float(cond_macro) if not np.isinf(cond_macro) and not np.isnan(cond_macro) else 999999.0,
+            "cov_cond_sector": float(cond_sector) if not np.isinf(cond_sector) and not np.isnan(cond_sector) else 999999.0,
+            "cov_healthy_macro": cov_healthy_macro,
+            "cov_healthy_sector": cov_healthy_sector,
             "spx_level": float(spy_series.loc[current_date]),
             "spx_sma50": float(spy_sma50.loc[current_date]) if not np.isnan(spy_sma50.loc[current_date]) else float(spy_series.loc[current_date]),
             "vix_level": float(vix_series.loc[current_date]),
             "vix_rolling_mean": float(vix_rolling_mean.loc[current_date]),
-            "vix_dynamic_threshold": float(vix_dynamic_threshold.loc[current_date])
+            "vix_dynamic_threshold": float(vix_dynamic_threshold.loc[current_date]),
+            "move_level": float(move_series.loc[current_date]) if current_date in move_series.index and not np.isnan(move_series.loc[current_date]) else 80.0,
+            "move_rolling_mean": float(move_rolling_mean.loc[current_date]),
+            "move_dynamic_threshold": float(move_dynamic_threshold.loc[current_date]),
+            "credit_ratio": float(credit_ratio.loc[current_date]),
+            "credit_rolling_mean": float(credit_rolling_mean.loc[current_date]),
+            "credit_dynamic_threshold": float(credit_dynamic_threshold.loc[current_date]),
+            "macro_contrib": macro_contrib_dict,
+            "sector_contrib": sector_contrib_dict,
+            "macro_returns": macro_ret_dict,
+            "sector_returns": sector_ret_dict
         })
         
     df_result = pd.DataFrame(turb_records)
-    df_result['turb_slow'] = df_result['turb_raw'].ewm(span=5, adjust=False).mean()
-    df_result['turb_fast'] = df_result['turb_raw'].ewm(span=2, adjust=False).mean()
+    df_result['macro_slow'] = df_result['turb_macro_raw'].ewm(span=5, adjust=False).mean()
+    df_result['macro_fast'] = df_result['turb_macro_raw'].ewm(span=2, adjust=False).mean()
+    df_result['sector_slow'] = df_result['turb_sector_raw'].ewm(span=5, adjust=False).mean()
+    df_result['sector_fast'] = df_result['turb_sector_raw'].ewm(span=2, adjust=False).mean()
     
-    # Calculate 504 trading days rolling percentile (2 years)
-    df_result['slow_warn'] = df_result['turb_slow'].rolling(504, min_periods=100).quantile(0.95)
-    df_result['slow_extreme'] = df_result['turb_slow'].rolling(504, min_periods=100).quantile(0.99)
+    df_result['macro_warn'] = df_result['macro_slow'].rolling(504, min_periods=100).quantile(0.95)
+    df_result['macro_extreme'] = df_result['macro_slow'].rolling(504, min_periods=100).quantile(0.99)
+    df_result['sector_warn'] = df_result['sector_slow'].rolling(504, min_periods=100).quantile(0.95)
+    df_result['sector_extreme'] = df_result['sector_slow'].rolling(504, min_periods=100).quantile(0.99)
     
-    # Handle NaN values
-    df_result['slow_warn'] = df_result['slow_warn'].ffill().bfill()
-    df_result['slow_extreme'] = df_result['slow_extreme'].ffill().bfill()
-    
-    # Fallback default values
-    df_result['slow_warn'] = df_result['slow_warn'].fillna(2.0)
-    df_result['slow_extreme'] = df_result['slow_extreme'].fillna(4.0)
+    df_result['macro_warn'] = df_result['macro_warn'].ffill().bfill().fillna(2.0)
+    df_result['macro_extreme'] = df_result['macro_extreme'].ffill().bfill().fillna(4.0)
+    df_result['sector_warn'] = df_result['sector_warn'].ffill().bfill().fillna(2.0)
+    df_result['sector_extreme'] = df_result['sector_extreme'].ffill().bfill().fillna(4.0)
     
     return df_result
 
 def process_turbulence_output(df_result):
     latest = df_result.iloc[-1]
     
-    turb_above_warn = bool(latest['turb_slow'] > latest['slow_warn'])
+    macro_above_warn = bool(latest['macro_slow'] > latest['macro_warn'])
+    sector_above_warn = bool(latest['sector_slow'] > latest['sector_warn'])
     spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'])
-    vix_dynamic_thresh = float(latest['vix_dynamic_threshold'])
-    vix_complacent = bool(latest['vix_level'] < vix_dynamic_thresh)
     
-    danger_zone_active = bool(turb_above_warn and spx_above_sma50 and vix_complacent)
+    vix_complacent = bool(latest['vix_level'] < latest['vix_dynamic_threshold'])
+    move_complacent = bool(latest['move_level'] < latest['move_dynamic_threshold'])
+    credit_complacent = bool(latest['credit_ratio'] < latest['credit_dynamic_threshold'])
+    
+    any_complacency = bool(vix_complacent or move_complacent or credit_complacent)
+    danger_zone_active = bool(macro_above_warn and spx_above_sma50 and any_complacency)
     
     state = "NORMAL"
-    if latest['turb_slow'] > latest['slow_extreme'] and vix_complacent:
+    if latest['macro_slow'] > latest['macro_extreme']:
         state = "CRITICAL"
     elif danger_zone_active:
         state = "HIGH RISK"
-    elif turb_above_warn:
+    elif macro_above_warn or sector_above_warn:
         state = "ELEVATED RISK"
         
     state_colors = {
@@ -393,13 +459,12 @@ def process_turbulence_output(df_result):
         "CRITICAL": "#e71d36"
     }
     
-    # Calculate continuous position size for latest
-    slow_warn = latest['slow_warn']
-    slow_extreme = latest['slow_extreme']
-    turb_slow = latest['turb_slow']
+    macro_warn = latest['macro_warn']
+    macro_extreme = latest['macro_extreme']
+    macro_slow = latest['macro_slow']
     
-    if slow_extreme > slow_warn:
-        x = (turb_slow - slow_warn) / (slow_extreme - slow_warn)
+    if macro_extreme > macro_warn:
+        x = (macro_slow - macro_warn) / (macro_extreme - macro_warn)
     else:
         x = 0.0
         
@@ -411,8 +476,7 @@ def process_turbulence_output(df_result):
         else:
             position_size_pct = 100.0 - 25.0 * x
     else:
-        # x >= 1
-        if vix_complacent:
+        if any_complacency:
             position_size_pct = max(25.0, 50.0 - 25.0 * (x - 1.0))
         else:
             position_size_pct = max(50.0, 75.0 - 25.0 * (x - 1.0))
@@ -421,17 +485,19 @@ def process_turbulence_output(df_result):
     
     chart_series = []
     for _, row in df_result.iterrows():
-        t_warn = row['turb_slow'] > row['slow_warn']
+        t_warn = row['macro_slow'] > row['macro_warn']
         s_above = row['spx_level'] > row['spx_sma50']
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
-        dz = bool(t_warn and s_above and v_comp)
+        m_comp = row['move_level'] < row['move_dynamic_threshold']
+        c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
+        any_comp = bool(v_comp or m_comp or c_comp)
+        dz = bool(t_warn and s_above and any_comp)
         
-        # Calculate continuous position size for history
-        h_warn = row['slow_warn']
-        h_extreme = row['slow_extreme']
-        h_turb_slow = row['turb_slow']
+        h_warn = row['macro_warn']
+        h_extreme = row['macro_extreme']
+        h_macro_slow = row['macro_slow']
         if h_extreme > h_warn:
-            hx = (h_turb_slow - h_warn) / (h_extreme - h_warn)
+            hx = (h_macro_slow - h_warn) / (h_extreme - h_warn)
         else:
             hx = 0.0
             
@@ -443,44 +509,59 @@ def process_turbulence_output(df_result):
             else:
                 h_pos = 100.0 - 25.0 * hx
         else:
-            if v_comp:
+            if any_comp:
                 h_pos = max(25.0, 50.0 - 25.0 * (hx - 1.0))
             else:
                 h_pos = max(50.0, 75.0 - 25.0 * (hx - 1.0))
                 
         chart_series.append({
             "date": row['date'],
-            "turb_slow": round(float(row['turb_slow']), 2),
-            "turb_fast": round(float(row['turb_fast']), 2),
-            "slow_warn": round(float(row['slow_warn']), 2),
-            "slow_extreme": round(float(row['slow_extreme']), 2),
+            "turb_slow": round(float(row['macro_slow']), 2),
+            "turb_fast": round(float(row['macro_fast']), 2),
+            "slow_warn": round(float(row['macro_warn']), 2),
+            "slow_extreme": round(float(row['macro_extreme']), 2),
+            "macro_slow": round(float(row['macro_slow']), 2),
+            "macro_fast": round(float(row['macro_fast']), 2),
+            "macro_warn": round(float(row['macro_warn']), 2),
+            "macro_extreme": round(float(row['macro_extreme']), 2),
+            "sector_slow": round(float(row['sector_slow']), 2),
+            "sector_fast": round(float(row['sector_fast']), 2),
+            "sector_warn": round(float(row['sector_warn']), 2),
+            "sector_extreme": round(float(row['sector_extreme']), 2),
             "spx": round(float(row['spx_level']), 2),
             "vix": round(float(row['vix_level']), 2),
             "vix_rolling_mean": round(float(row['vix_rolling_mean']), 2),
             "vix_dynamic_threshold": round(float(row['vix_dynamic_threshold']), 2),
+            "move": round(float(row['move_level']), 2),
+            "move_rolling_mean": round(float(row['move_rolling_mean']), 2),
+            "move_dynamic_threshold": round(float(row['move_dynamic_threshold']), 2),
+            "credit_ratio": round(float(row['credit_ratio']), 3),
+            "credit_dynamic_threshold": round(float(row['credit_dynamic_threshold']), 3),
             "danger_zone": dz,
             "position_size_pct": int(round(h_pos))
         })
         
-    # Extract Danger Zone history periods (find contiguous periods of danger_zone = True)
     dz_periods = []
     in_period = False
     start_date = None
     peak_turb = 0.0
     
     for idx, row in df_result.iterrows():
-        t_warn = row['turb_slow'] > row['slow_warn']
+        t_warn = row['macro_slow'] > row['macro_warn']
         s_above = row['spx_level'] > row['spx_sma50']
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
-        dz = bool(t_warn and s_above and v_comp)
+        m_comp = row['move_level'] < row['move_dynamic_threshold']
+        c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
+        any_comp = bool(v_comp or m_comp or c_comp)
+        dz = bool(t_warn and s_above and any_comp)
         
         if dz:
             if not in_period:
                 in_period = True
                 start_date = row['date']
-                peak_turb = float(row['turb_slow'])
+                peak_turb = float(row['macro_slow'])
             else:
-                peak_turb = max(peak_turb, float(row['turb_slow']))
+                peak_turb = max(peak_turb, float(row['macro_slow']))
         else:
             if in_period:
                 end_date = df_result.iloc[idx-1]['date']
@@ -504,6 +585,29 @@ def process_turbulence_output(df_result):
     dz_periods.reverse()
     danger_zone_history = dz_periods[:10]
     
+    # Format Contributors
+    macro_contribs_list = []
+    tot_abs_macro = sum(abs(v) for v in latest['macro_contrib'].values()) or 1.0
+    for ticker, val in latest['macro_contrib'].items():
+        macro_contribs_list.append({
+            "ticker": ticker,
+            "contribution": round(val, 4),
+            "pct": round((abs(val) / tot_abs_macro) * 100, 1),
+            "return": round(latest['macro_returns'][ticker], 4)
+        })
+    macro_contribs_list = sorted(macro_contribs_list, key=lambda x: abs(x['contribution']), reverse=True)
+    
+    sector_contribs_list = []
+    tot_abs_sector = sum(abs(v) for v in latest['sector_contrib'].values()) or 1.0
+    for ticker, val in latest['sector_contrib'].items():
+        sector_contribs_list.append({
+            "ticker": ticker,
+            "contribution": round(val, 4),
+            "pct": round((abs(val) / tot_abs_sector) * 100, 1),
+            "return": round(latest['sector_returns'][ticker], 4)
+        })
+    sector_contribs_list = sorted(sector_contribs_list, key=lambda x: abs(x['contribution']), reverse=True)
+    
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status": {
@@ -512,12 +616,28 @@ def process_turbulence_output(df_result):
             "state_color": state_colors[state],
             "position_size_pct": position_size_pct,
             "turbulence": {
-                "slow": round(float(latest['turb_slow']), 2),
-                "fast": round(float(latest['turb_fast']), 2),
-                "warning_threshold": round(float(latest['slow_warn']), 2),
-                "extreme_threshold": round(float(latest['slow_extreme']), 2),
-                "cov_condition_number": round(float(latest['cov_condition_number']), 2),
-                "cov_healthy": bool(latest['cov_healthy'])
+                "slow": round(float(latest['macro_slow']), 2),
+                "fast": round(float(latest['macro_fast']), 2),
+                "warning_threshold": round(float(latest['macro_warn']), 2),
+                "extreme_threshold": round(float(latest['macro_extreme']), 2),
+                "cov_condition_number": round(float(latest['cov_cond_macro']), 2),
+                "cov_healthy": bool(latest['cov_healthy_macro'])
+            },
+            "macro_turbulence": {
+                "slow": round(float(latest['macro_slow']), 2),
+                "fast": round(float(latest['macro_fast']), 2),
+                "warning_threshold": round(float(latest['macro_warn']), 2),
+                "extreme_threshold": round(float(latest['macro_extreme']), 2),
+                "cov_condition_number": round(float(latest['cov_cond_macro']), 2),
+                "cov_healthy": bool(latest['cov_healthy_macro'])
+            },
+            "sector_dispersion": {
+                "slow": round(float(latest['sector_slow']), 2),
+                "fast": round(float(latest['sector_fast']), 2),
+                "warning_threshold": round(float(latest['sector_warn']), 2),
+                "extreme_threshold": round(float(latest['sector_extreme']), 2),
+                "cov_condition_number": round(float(latest['cov_cond_sector']), 2),
+                "cov_healthy": bool(latest['cov_healthy_sector'])
             },
             "spx": {
                 "level": round(float(latest['spx_level']), 2),
@@ -527,13 +647,27 @@ def process_turbulence_output(df_result):
             "vix": {
                 "level": round(float(latest['vix_level']), 2),
                 "below_25": bool(latest['vix_level'] < 25.0),
-                "dynamic_threshold": round(vix_dynamic_thresh, 2),
+                "dynamic_threshold": round(float(latest['vix_dynamic_threshold']), 2),
                 "rolling_mean": round(float(latest['vix_rolling_mean']), 2),
                 "below_dynamic": vix_complacent
             },
+            "move": {
+                "level": round(float(latest['move_level']), 2),
+                "dynamic_threshold": round(float(latest['move_dynamic_threshold']), 2),
+                "rolling_mean": round(float(latest['move_rolling_mean']), 2),
+                "below_dynamic": move_complacent
+            },
+            "credit": {
+                "level": round(float(latest['credit_ratio']), 3),
+                "dynamic_threshold": round(float(latest['credit_dynamic_threshold']), 3),
+                "rolling_mean": round(float(latest['credit_rolling_mean']), 3),
+                "below_dynamic": credit_complacent
+            },
             "divergence": {
                 "active": danger_zone_active
-            }
+            },
+            "macro_contributors": macro_contribs_list,
+            "sector_contributors": sector_contribs_list
         },
         "danger_zone_history": danger_zone_history,
         "chart_series": chart_series

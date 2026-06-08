@@ -335,24 +335,57 @@
                         <h3 data-i18n="turb_checklist">Danger Zone Checklist</h3>
                         <ul class="turb-checklist-list">
                             <li>
-                                <i id="check-icon-turb" class="check-icon text-muted" data-lucide="circle"></i>
-                                <span data-i18n="turb_cond_dist">1. Cross-Asset Turbulence Elevated</span>
-                                <span id="check-val-turb" class="font-data">-</span>
+                                <i id="check-icon-macro" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_macro">1. Macro Turbulence Elevated</span>
+                                <span id="check-val-macro" class="font-data">-</span>
+                            </li>
+                            <li>
+                                <i id="check-icon-sector" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_sector">2. Sector Dispersion Elevated</span>
+                                <span id="check-val-sector" class="font-data">-</span>
                             </li>
                             <li>
                                 <i id="check-icon-spx" class="check-icon text-muted" data-lucide="circle"></i>
-                                <span data-i18n="turb_cond_spx">2. S&P 500 above 50-day SMA</span>
+                                <span data-i18n="turb_cond_spx">3. S&P 500 above 50-day SMA</span>
                                 <span id="check-val-spx" class="font-data">-</span>
                             </li>
                             <li>
                                 <i id="check-icon-vix" class="check-icon text-muted" data-lucide="circle"></i>
-                                <span data-i18n="turb_cond_vix">3. VIX Below Dynamic Threshold</span>
+                                <span data-i18n="turb_cond_vix">4. Equity VIX Complacent</span>
                                 <span id="check-val-vix" class="font-data">-</span>
+                            </li>
+                            <li>
+                                <i id="check-icon-move" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_move">5. Bond MOVE Complacent</span>
+                                <span id="check-val-move" class="font-data">-</span>
+                            </li>
+                            <li>
+                                <i id="check-icon-credit" class="check-icon text-muted" data-lucide="circle"></i>
+                                <span data-i18n="turb_cond_credit">6. Credit Spread Complacent</span>
+                                <span id="check-val-credit" class="font-data">-</span>
                             </li>
                         </ul>
                         <div id="turb-verdict-banner" class="verdict-banner">
                             <i data-lucide="info" style="width: 14px; height: 14px; flex-shrink: 0;"></i> 
                             <span id="turb-verdict-text" data-i18n="turb_verdict_loading">Checking conditions...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attribution Diagnostics Panel -->
+                <div class="turb-attribution-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <!-- Macro Attribution Card -->
+                    <div class="turb-card macro-attrib-card surface-card" style="padding: 20px;">
+                        <h3 data-i18n="turb_macro_attrib_title" style="margin: 0 0 15px 0; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Macro Risk Attribution</h3>
+                        <div id="macro-attrib-list" class="attrib-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    <!-- Sector Attribution Card -->
+                    <div class="turb-card sector-attrib-card surface-card" style="padding: 20px;">
+                        <h3 data-i18n="turb_sector_attrib_title" style="margin: 0 0 15px 0; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Sector Dispersion Attribution</h3>
+                        <div id="sector-attrib-list" class="attrib-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Populated dynamically -->
                         </div>
                     </div>
                 </div>

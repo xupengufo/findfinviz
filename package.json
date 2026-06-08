@@ -1,0 +1,7 @@
+{
+  "name": "findfinviz-sync",
+  "version": "1.0.0",
+  "scripts": {
+    "sync": ".venv/bin/python local_sync.py"
+  }
+}

@@ -1056,9 +1056,15 @@ def get_turbulence():
             "state_color": "#2ec4b6",
             "position_size_pct": 100,
             "turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
+            "macro_turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
+            "sector_dispersion": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
             "spx": {"level": 0.0, "sma50": 0.0, "above_sma50": True},
             "vix": {"level": 0.0, "below_25": True, "dynamic_threshold": 25.0, "rolling_mean": 20.0, "below_dynamic": True},
-            "divergence": {"active": False}
+            "move": {"level": 0.0, "dynamic_threshold": 80.0, "rolling_mean": 80.0, "below_dynamic": True},
+            "credit": {"level": 1.35, "dynamic_threshold": 1.40, "rolling_mean": 1.35, "below_dynamic": True},
+            "divergence": {"active": False},
+            "macro_contributors": [],
+            "sector_contributors": []
         },
         "danger_zone_history": [],
         "chart_series": []
