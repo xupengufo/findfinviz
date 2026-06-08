@@ -1882,6 +1882,94 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // 4. Update Regime Interpretation & Actionable Guidelines Card
+        const tipsCard = document.getElementById('turb-tips-card');
+        if (tipsCard) {
+            const state = status.state;
+            let titleText = activeLang === 'zh' ? '当前风险状态解读与交易指南' : 'Regime Interpretation & Actionable Guidelines';
+            let subtitleText = activeLang === 'zh' ? '基于当前市场动态的量化专家系统分析与战术性配仓建议。' : 'Expert-system analysis and tactical rules-based allocation suggestions based on current market dynamics.';
+            let analysisHeader = activeLang === 'zh' ? '市场状态分析' : 'Market Regime Analysis';
+            let actionHeader = activeLang === 'zh' ? '战术行动方案' : 'Tactical Action Plan';
+            
+            let analysisContent = '';
+            let actionListHtml = '';
+            
+            if (state === 'NORMAL') {
+                analysisContent = activeLang === 'zh' 
+                    ? '<strong>当前状态：常态化（NORMAL）</strong>。大类资产之间的收益率协方差结构保持稳定，传统资产分散化配置模型（如 60/40 股债平衡、风险平价）在此阶段高度有效。标普500（SPY）指数价格呈现健康的上升通道趋势，且 VIX 指数处于正常或较低的历史分位数。未检测到系统性资产重组或共振下跌迹象。'
+                    : '<strong>Current Regime: NORMAL</strong>. Covariance structures across major asset classes are stable. Traditional diversification models (e.g. 60/40 balance, risk-parity) are highly effective in this phase. The S&P 500 (SPY) tracks a healthy upward trend, and VIX is in a normal or low historical range. No signs of systemic correlation fracture detected.';
+                
+                actionListHtml = activeLang === 'zh'
+                    ? `<li>维持满额多头风险敞口，建议仓位保持 <strong>100%</strong>。</li>
+                       <li>遵循日常的战略资产配置（SAA），无需进行任何额外的期权或反向基金对冲。</li>
+                       <li>可积极参与市场贝塔（Beta）行情，或在「技术扫描器」中寻找强势个股的突破与复利复合增长机会。</li>`
+                    : `<li>Maintain full risk asset exposure; recommended position size at <strong>100%</strong>.</li>
+                       <li>Follow standard Strategic Asset Allocation (SAA); no extra hedging or inverse products needed.</li>
+                       <li>Actively capture market Beta; search the Technical Scanner for breakout or compounder opportunities.</li>`;
+            } else if (state === 'ELEVATED RISK') {
+                analysisContent = activeLang === 'zh'
+                    ? '<strong>当前状态：风险抬升（ELEVATED RISK）</strong>。跨资产湍流指数（慢速线）已突破 95% 历史警戒线，表明资产间收益相关性偏离正常模式，底层系统性压力正在加速积聚。目前快速湍流线亦高企，表明市场正在承受强烈的资产重叠共振冲击，资产分散化的保护效应正在迅速下降。'
+                    : '<strong>Current Regime: ELEVATED RISK</strong>. The Slow Turbulence Index has crossed the 95th percentile warning line, indicating that asset return correlations are deviating from historical norms. A sharp rise in the Fast Turbulence Index confirms an immediate cross-asset correlation shock, leading to a quick decay in diversification protection.';
+                
+                actionListHtml = activeLang === 'zh'
+                    ? `<li>限制投资组合的交易杠杆，提高现金比率或资产防御性。</li>
+                       <li>传统多元化策略开始弱化（股债同跌风险增加），应降低对纯债券对冲的依赖，增配低 Beta 或抗通胀资产。</li>
+                       <li>战术上收敛风控，避免盲目追高，建议缩减估值过高、波动剧烈的投机性高 Beta 多头头寸。</li>`
+                    : `<li>Limit portfolio leverage; raise cash buffers or defensive assets.</li>
+                       <li>Traditional diversification weakens (bond-equity correlation rises); reduce reliance on pure bond hedging and allocate to low-beta assets.</li>
+                       <li>Tighten stop-losses; avoid chasing high valuations and prune speculative high-beta growth holdings.</li>`;
+            } else if (state === 'HIGH RISK') {
+                analysisContent = activeLang === 'zh'
+                    ? '<strong>当前状态：高风险（HIGH RISK - Danger Zone 预警激活）</strong>。系统已触发模型置信度最高的 <strong>Danger Zone 警告</strong>！市场呈现典型的“牛市末自满”特征——SPY 仍运行于50日均线上方（买盘假象），VIX 仍低于滚动动态阈值（市场自满、缺乏保费买盘），然而大类资产湍流指数已突破历史警戒线，底层结构严重分裂。这往往是暴风雨来临前的典型状态。'
+                    : '<strong>Current Regime: HIGH RISK (Danger Zone Active)</strong>. The system has triggered a high-confidence **Danger Zone alert**! The market is showcasing a classic "complacent bull extension" signature: SPY is above its 50-day SMA (buying momentum) and VIX is below the dynamic threshold (market complacency), yet cross-asset turbulence has breached the warning level. This is a typical pre-drawdown signature.';
+                
+                actionListHtml = activeLang === 'zh'
+                    ? `<li><strong>坚决执行防御性降仓</strong>：建议将风险资产仓位限制在 <strong>50%</strong> 左右，主动回收流动性。</li>
+                       <li><strong>部署衍生品保护</strong>：买入 SPY 或大盘指数的看跌期权（Put Option），以低成本锁定既得利润。</li>
+                       <li>由于跨资产协方差异常，传统“防守型板块”或债券可能无法有效对冲股票跌势，应提高硬货币或绝对收益策略比重。</li>`
+                    : `<li>**Enforce defensive positioning**: scale down risk assets to **50%** and raise cash liquidity.</li>
+                       <li>**Deploy tail-risk hedges**: buy protective index puts (SPY) to cost-effectively lock in gains.</li>
+                       <li>As covariance fractures, traditional defensive sectors or bonds might fall together with stocks; prioritize hard cash or absolute-return strategies.</li>`;
+            } else if (state === 'CRITICAL') {
+                analysisContent = activeLang === 'zh'
+                    ? '<strong>当前状态：极端风险（CRITICAL - 崩溃警告）</strong>。跨资产慢速湍流指数已突破 99% 的极端历史上限，且快速湍流仍在极端冲顶。大类资产的协方差出现破坏性坍塌，相关性在短期内极速趋近于 1（所有资产同向暴跌风险极大）。一旦市场流动性受阻，极易发生无差别抛售踩踏。'
+                    : '<strong>Current Regime: CRITICAL (Crash Warning)</strong>. The Slow Turbulence Index has breached the 99th percentile extreme historical limit, with the fast line peaking. Covariance structures have collapsed, and correlations are rapidly converging to 1. An imminent, indiscriminate liquidity sell-off is highly probable if systemic stress persists.';
+                
+                actionListHtml = activeLang === 'zh'
+                    ? `<li><strong>最大限度回撤风险风险头寸</strong>：建议将资产仓位限制在 <strong>25%</strong> 的最低防御线，全面退守现金与超短期国债。</li>
+                       <li><strong>警惕相关性同收敛风险</strong>：任何依靠分散化资产组合的交易模型（如 Risk Parity、固定比例平衡仓位）都可能面临灾难性的历史回撤。</li>
+                       <li><strong>保持右侧操作思路</strong>：在此阶段坚决禁止任何“抄底”行为，耐心等待快速与慢速湍流线明确跌回至警戒线以下再做部署。</li>`
+                    : `<li>**Drastically scale down to maximum defense**: reduce position size to **25%**, parking capital in cash and short-term bills.</li>
+                       <li>**Beware of correlation convergence**: balanced models (e.g. Risk Parity) are highly susceptible to historic drawdowns in this regime.</li>
+                       <li>**Wait for confirmation**: strictly avoid catching falling knives; stay on the sidelines until both fast/slow turbulence indexes fall back below warning lines.</li>`;
+            }
+            
+            // Set dynamic border color matching the regime state
+            tipsCard.style.borderLeft = `4px solid ${status.state_color}`;
+            
+            tipsCard.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+                    <div class="tips-icon-wrap" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--gold-wash); color: var(--brand-gold);">
+                        <i data-lucide="compass" style="width: 18px; height: 18px;"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 0.95rem; font-weight: 600; font-family: var(--font-display); color: var(--text-primary);">${titleText}</h3>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">${subtitleText}</span>
+                    </div>
+                </div>
+                <div class="tips-content-grid">
+                    <div class="tips-interpretation">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${analysisHeader}</h4>
+                        <div style="font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary);">${analysisContent}</div>
+                    </div>
+                    <div class="tips-guidelines">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.75rem; color: var(--brand-gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${actionHeader}</h4>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.7; color: var(--text-secondary);">${actionListHtml}</ul>
+                    </div>
+                </div>
+            `;
+        }
+
         lucide.createIcons(); // Instantly compile dynamic Lucide tags
         
         // 4. Render Chart
