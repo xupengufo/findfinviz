@@ -47,6 +47,24 @@ class FallbackCache:
         # Always resolve db path defensively for local fallback
         if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
             self.db_path = "/tmp/cache.db"
+            if not os.path.exists(self.db_path):
+                import shutil
+                packaged_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
+                if os.path.exists(packaged_db):
+                    try:
+                        shutil.copy2(packaged_db, self.db_path)
+                        print("Successfully copied packaged cache.db to /tmp/cache.db")
+                    except Exception as copy_err:
+                        print("Failed to copy packaged cache.db to /tmp/cache.db:", copy_err)
+                else:
+                    # Try project root fallback
+                    packaged_db_root = os.path.join(project_root, "cache.db")
+                    if os.path.exists(packaged_db_root):
+                        try:
+                            shutil.copy2(packaged_db_root, self.db_path)
+                            print("Successfully copied packaged cache.db (root) to /tmp/cache.db")
+                        except Exception as copy_err:
+                            print("Failed to copy packaged cache.db (root) to /tmp/cache.db:", copy_err)
         else:
             self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
             if not os.path.exists(os.path.dirname(self.db_path)):
@@ -131,6 +149,10 @@ class FallbackCache:
                     if expires_at > int(datetime.now(timezone.utc).timestamp()):
                         return json.loads(val)
                     else:
+                        # On Vercel, return stale data rather than deleting it and failing
+                        if os.environ.get("VERCEL"):
+                            print(f"Cache key '{key}' expired but returning stale data on Vercel.")
+                            return json.loads(val)
                         self.delete(key)
             except Exception as e:
                 print("SQLite cache get error:", e)
