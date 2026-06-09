@@ -276,6 +276,39 @@ def sync_reddit():
     except Exception as e:
         print("Failed to sync Reddit sentiment after retries:", e)
 
+def get_ew_cov_and_mean(history, halflife=63):
+    """Calculate exponentially weighted mean and covariance matrix."""
+    N, k = history.shape
+    weights = 2.0 ** (-np.arange(N - 1, -1, -1) / halflife)
+    weights /= weights.sum()
+    
+    # Weighted mean
+    weighted_mean = np.sum(history.values * weights[:, np.newaxis], axis=0)
+    
+    # Centered returns
+    centered = history.values - weighted_mean
+    
+    # Unbiased weighted covariance
+    divisor = 1.0 - np.sum(weights ** 2)
+    if divisor <= 0:
+        divisor = 1.0
+    cov_matrix = (centered.T * weights) @ centered / divisor
+    
+    return weighted_mean, cov_matrix
+
+def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False):
+    """Map normalized distance x to a target position size using a smooth sigmoid."""
+    if danger_zone_active or any_complacency or credit_stressed:
+        min_pos = 25.0
+    else:
+        min_pos = 50.0
+        
+    x_clipped = np.clip(x, -2.0, 5.0)
+    sigmoid_val = 1.0 / (1.0 + np.exp(-4.0 * (x_clipped - 0.5)))
+    
+    pos = min_pos + (100.0 - min_pos) * (1.0 - sigmoid_val)
+    return pos
+
 MACRO_TICKERS = ["SPY", "IWM", "EFA", "EEM", "TLT", "IEF", "HYG", "UUP", "GLD", "DBC"]
 SECTOR_TICKERS = ["XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU", "XLRE", "XLC"]
 
@@ -284,7 +317,7 @@ def calculate_market_turbulence():
     all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD"]))
     
     def do_download():
-        df = yf.download(all_tickers, period="3y", progress=False)
+        df = yf.download(all_tickers, period="10y", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             if 'Adj Close' in df.columns.levels[0]:
                 return df['Adj Close']
@@ -342,8 +375,7 @@ def calculate_market_turbulence():
         # 1. Macro calculation
         r_macro = df_returns_macro.iloc[i].values
         history_macro = df_returns_macro.iloc[i-252:i]
-        mu_macro = history_macro.mean().values
-        cov_macro = history_macro.cov().values
+        mu_macro, cov_macro = get_ew_cov_and_mean(history_macro, halflife=63)
         
         cond_macro = np.linalg.cond(cov_macro)
         cov_healthy_macro = bool(cond_macro < 1000)
@@ -351,8 +383,7 @@ def calculate_market_turbulence():
         # 2. Sector calculation
         r_sector = df_returns_sector.iloc[i].values
         history_sector = df_returns_sector.iloc[i-252:i]
-        mu_sector = history_sector.mean().values
-        cov_sector = history_sector.cov().values
+        mu_sector, cov_sector = get_ew_cov_and_mean(history_sector, halflife=63)
         
         cond_sector = np.linalg.cond(cov_sector)
         cov_healthy_sector = bool(cond_sector < 1000)
@@ -405,6 +436,7 @@ def calculate_market_turbulence():
             "move_dynamic_threshold": float(move_dynamic_threshold.loc[current_date]),
             "credit_ratio": float(credit_ratio.loc[current_date]),
             "credit_rolling_mean": float(credit_rolling_mean.loc[current_date]),
+            "credit_rolling_std": float(credit_rolling_std.loc[current_date]),
             "credit_dynamic_threshold": float(credit_dynamic_threshold.loc[current_date]),
             "macro_contrib": macro_contrib_dict,
             "sector_contrib": sector_contrib_dict,
@@ -413,10 +445,10 @@ def calculate_market_turbulence():
         })
         
     df_result = pd.DataFrame(turb_records)
-    df_result['macro_slow'] = df_result['turb_macro_raw'].ewm(span=5, adjust=False).mean()
-    df_result['macro_fast'] = df_result['turb_macro_raw'].ewm(span=2, adjust=False).mean()
-    df_result['sector_slow'] = df_result['turb_sector_raw'].ewm(span=5, adjust=False).mean()
-    df_result['sector_fast'] = df_result['turb_sector_raw'].ewm(span=2, adjust=False).mean()
+    df_result['macro_slow'] = df_result['turb_macro_raw'].ewm(span=15, adjust=False).mean()
+    df_result['macro_fast'] = df_result['turb_macro_raw'].ewm(span=3, adjust=False).mean()
+    df_result['sector_slow'] = df_result['turb_sector_raw'].ewm(span=15, adjust=False).mean()
+    df_result['sector_fast'] = df_result['turb_sector_raw'].ewm(span=3, adjust=False).mean()
     
     df_result['macro_warn'] = df_result['macro_slow'].rolling(504, min_periods=100).quantile(0.95)
     df_result['macro_extreme'] = df_result['macro_slow'].rolling(504, min_periods=100).quantile(0.99)
@@ -431,67 +463,20 @@ def calculate_market_turbulence():
     return df_result
 
 def process_turbulence_output(df_result):
-    latest = df_result.iloc[-1]
-    
-    macro_above_warn = bool(latest['macro_slow'] > latest['macro_warn'])
-    sector_above_warn = bool(latest['sector_slow'] > latest['sector_warn'])
-    spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'])
-    
-    vix_complacent = bool(latest['vix_level'] < latest['vix_dynamic_threshold'])
-    move_complacent = bool(latest['move_level'] < latest['move_dynamic_threshold'])
-    credit_complacent = bool(latest['credit_ratio'] < latest['credit_dynamic_threshold'])
-    
-    any_complacency = bool(vix_complacent or move_complacent or credit_complacent)
-    danger_zone_active = bool(macro_above_warn and spx_above_sma50 and any_complacency)
-    
-    state = "NORMAL"
-    if latest['macro_slow'] > latest['macro_extreme']:
-        state = "CRITICAL"
-    elif danger_zone_active:
-        state = "HIGH RISK"
-    elif macro_above_warn or sector_above_warn:
-        state = "ELEVATED RISK"
-        
-    state_colors = {
-        "NORMAL": "#2ec4b6",
-        "ELEVATED RISK": "#ffbf00",
-        "HIGH RISK": "#d98a2b",
-        "CRITICAL": "#e71d36"
-    }
-    
-    macro_warn = latest['macro_warn']
-    macro_extreme = latest['macro_extreme']
-    macro_slow = latest['macro_slow']
-    
-    if macro_extreme > macro_warn:
-        x = (macro_slow - macro_warn) / (macro_extreme - macro_warn)
-    else:
-        x = 0.0
-        
-    if x <= 0:
-        position_size_pct = 100.0
-    elif x < 1:
-        if danger_zone_active:
-            position_size_pct = 100.0 - 50.0 * x
-        else:
-            position_size_pct = 100.0 - 25.0 * x
-    else:
-        if any_complacency:
-            position_size_pct = max(25.0, 50.0 - 25.0 * (x - 1.0))
-        else:
-            position_size_pct = max(50.0, 75.0 - 25.0 * (x - 1.0))
-            
-    position_size_pct = int(round(position_size_pct))
-    
-    chart_series = []
+    # Pre-calculate raw and smoothed position sizes for all dates
+    raw_positions = []
     for _, row in df_result.iterrows():
         t_warn = row['macro_slow'] > row['macro_warn']
-        s_above = row['spx_level'] > row['spx_sma50']
+        s_disp_warn = row['sector_slow'] > row['sector_warn']
+        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
+        
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         m_comp = row['move_level'] < row['move_dynamic_threshold']
         c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
-        any_comp = bool(v_comp or m_comp or c_comp)
-        dz = bool(t_warn and s_above and any_comp)
+        any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
+        
+        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
+        c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
         
         h_warn = row['macro_warn']
         h_extreme = row['macro_extreme']
@@ -501,19 +486,65 @@ def process_turbulence_output(df_result):
         else:
             hx = 0.0
             
-        if hx <= 0:
-            h_pos = 100.0
-        elif hx < 1:
-            if dz:
-                h_pos = 100.0 - 50.0 * hx
-            else:
-                h_pos = 100.0 - 25.0 * hx
-        else:
-            if any_comp:
-                h_pos = max(25.0, 50.0 - 25.0 * (hx - 1.0))
-            else:
-                h_pos = max(50.0, 75.0 - 25.0 * (hx - 1.0))
-                
+        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed)
+        raw_positions.append(raw_pos)
+        
+    df_result['position_raw'] = raw_positions
+    df_result['position_smoothed'] = df_result['position_raw'].ewm(span=5, adjust=False).mean()
+    
+    latest = df_result.iloc[-1]
+    
+    macro_above_warn = bool(latest['macro_slow'] > latest['macro_warn'])
+    sector_above_warn = bool(latest['sector_slow'] > latest['sector_warn'])
+    spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'] * 1.01)
+    
+    vix_complacent = bool(latest['vix_level'] < latest['vix_dynamic_threshold'])
+    move_complacent = bool(latest['move_level'] < latest['move_dynamic_threshold'])
+    credit_complacent = bool(latest['credit_ratio'] < latest['credit_dynamic_threshold'])
+    
+    any_complacency = bool(sum([vix_complacent, move_complacent, credit_complacent]) >= 2)
+    danger_zone_active = bool((macro_above_warn or sector_above_warn) and spx_above_sma50 and any_complacency)
+    
+    credit_stressed = bool(latest['credit_ratio'] > (latest['credit_rolling_mean'] + 1.5 * latest['credit_rolling_std']))
+    
+    state = "NORMAL"
+    if latest['macro_slow'] > latest['macro_extreme']:
+        state = "CRITICAL"
+    elif danger_zone_active:
+        state = "HIGH RISK"
+    elif macro_above_warn or sector_above_warn or credit_stressed:
+        state = "ELEVATED RISK"
+        
+    state_flags = {
+        "normal": not (macro_above_warn or sector_above_warn or danger_zone_active or (latest['macro_slow'] > latest['macro_extreme']) or credit_stressed),
+        "elevated": bool(macro_above_warn or sector_above_warn or credit_stressed),
+        "high_risk": bool(danger_zone_active),
+        "critical": bool(latest['macro_slow'] > latest['macro_extreme'])
+    }
+        
+    state_colors = {
+        "NORMAL": "#2ec4b6",
+        "ELEVATED RISK": "#ffbf00",
+        "HIGH RISK": "#d98a2b",
+        "CRITICAL": "#e71d36"
+    }
+    
+    position_size_pct = int(round(latest['position_smoothed']))
+    
+    chart_series = []
+    for _, row in df_result.iterrows():
+        t_warn = row['macro_slow'] > row['macro_warn']
+        s_disp_warn = row['sector_slow'] > row['sector_warn']
+        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
+        
+        v_comp = row['vix_level'] < row['vix_dynamic_threshold']
+        m_comp = row['move_level'] < row['move_dynamic_threshold']
+        c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
+        any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
+        
+        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
+        c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
+        
         chart_series.append({
             "date": row['date'],
             "turb_slow": round(float(row['macro_slow']), 2),
@@ -538,7 +569,8 @@ def process_turbulence_output(df_result):
             "credit_ratio": round(float(row['credit_ratio']), 3),
             "credit_dynamic_threshold": round(float(row['credit_dynamic_threshold']), 3),
             "danger_zone": dz,
-            "position_size_pct": int(round(h_pos))
+            "credit_stressed": c_stressed,
+            "position_size_pct": int(round(row['position_smoothed']))
         })
         
     dz_periods = []
@@ -548,12 +580,13 @@ def process_turbulence_output(df_result):
     
     for idx, row in df_result.iterrows():
         t_warn = row['macro_slow'] > row['macro_warn']
-        s_above = row['spx_level'] > row['spx_sma50']
+        s_disp_warn = row['sector_slow'] > row['sector_warn']
+        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         m_comp = row['move_level'] < row['move_dynamic_threshold']
         c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
-        any_comp = bool(v_comp or m_comp or c_comp)
-        dz = bool(t_warn and s_above and any_comp)
+        any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
+        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
         
         if dz:
             if not in_period:
@@ -614,6 +647,7 @@ def process_turbulence_output(df_result):
             "date": latest['date'],
             "state": state,
             "state_color": state_colors[state],
+            "state_flags": state_flags,
             "position_size_pct": position_size_pct,
             "turbulence": {
                 "slow": round(float(latest['macro_slow']), 2),
@@ -661,7 +695,8 @@ def process_turbulence_output(df_result):
                 "level": round(float(latest['credit_ratio']), 3),
                 "dynamic_threshold": round(float(latest['credit_dynamic_threshold']), 3),
                 "rolling_mean": round(float(latest['credit_rolling_mean']), 3),
-                "below_dynamic": credit_complacent
+                "below_dynamic": credit_complacent,
+                "stressed": credit_stressed
             },
             "divergence": {
                 "active": danger_zone_active

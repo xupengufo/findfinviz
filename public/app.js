@@ -1795,7 +1795,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (status.state === 'ELEVATED RISK') descKey = 'turb_state_elevated_desc';
             else if (status.state === 'HIGH RISK') descKey = 'turb_state_high_desc';
             else if (status.state === 'CRITICAL') descKey = 'turb_state_critical_desc';
-            stateDesc.textContent = translations[activeLang][descKey] || '';
+            
+            const descText = translations[activeLang][descKey] || '';
+            
+            let flagsHtml = '';
+            if (status.state_flags) {
+                const activeFlags = [];
+                if (status.state_flags.critical) activeFlags.push({ name: activeLang === 'zh' ? '极端风险 (CRITICAL)' : 'CRITICAL', color: '#e71d36' });
+                if (status.state_flags.high_risk) activeFlags.push({ name: activeLang === 'zh' ? '高风险 (HIGH RISK)' : 'HIGH RISK', color: '#d98a2b' });
+                if (status.state_flags.elevated) activeFlags.push({ name: activeLang === 'zh' ? '预警激活 (ELEVATED)' : 'ELEVATED', color: '#ffbf00' });
+                if (status.state_flags.normal && activeFlags.length === 0) activeFlags.push({ name: activeLang === 'zh' ? '常态机制 (NORMAL)' : 'NORMAL', color: '#2ec4b6' });
+                
+                flagsHtml = `<div class="state-flags-row" style="display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap;">` + 
+                    activeFlags.map(f => `<span style="font-size: 0.65rem; font-weight: 700; font-family: var(--font-mono); padding: 2px 6px; border-radius: 4px; background: ${f.color}15; color: ${f.color}; border: 1px solid ${f.color}35;">${f.name}</span>`).join('') + 
+                    `</div>`;
+            }
+            
+            stateDesc.innerHTML = `<span>${descText}</span>${flagsHtml}`;
         }
         
         // 2. Update Position Card
@@ -1864,11 +1880,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `<i id="check-icon-move" class="check-icon unmet" data-lucide="circle"></i>`;
         }
         
-        if (creditVal) creditVal.textContent = `${latestCredit.level.toFixed(3)} (vs ${latestCredit.dynamic_threshold.toFixed(3)})`;
+        if (creditVal) {
+            let label = `${latestCredit.level.toFixed(3)} (vs ${latestCredit.dynamic_threshold.toFixed(3)})`;
+            if (latestCredit.stressed) {
+                label += activeLang === 'zh' ? ' (信用压力大!)' : ' (STRESSED!)';
+            }
+            creditVal.textContent = label;
+        }
         if (creditIcon) {
-            creditIcon.outerHTML = creditMet 
-                ? `<i id="check-icon-credit" class="check-icon met" data-lucide="check-circle-2"></i>`
-                : `<i id="check-icon-credit" class="check-icon unmet" data-lucide="circle"></i>`;
+            if (latestCredit.stressed) {
+                creditIcon.outerHTML = `<i id="check-icon-credit" class="check-icon warn-met" data-lucide="alert-triangle"></i>`;
+            } else {
+                creditIcon.outerHTML = creditMet 
+                    ? `<i id="check-icon-credit" class="check-icon met" data-lucide="check-circle-2"></i>`
+                    : `<i id="check-icon-credit" class="check-icon unmet" data-lucide="circle"></i>`;
+            }
         }
         
         // Verdict Banner
