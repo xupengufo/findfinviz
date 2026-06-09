@@ -332,15 +332,23 @@
 
                     <!-- Card 3: Probit Model -->
                     <div class="turb-card probit-card surface-card">
-                        <h3 data-i18n="turb_probit_title">Probit Crash Probability</h3>
-                        <div class="pos-percentage font-data"><span id="turb-probit-val">-</span>%</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <h3 data-i18n="turb_probit_title" style="margin: 0;">Probit Crash Probability</h3>
+                            <div class="probit-tooltip-trigger" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center;" title="Model Details">
+                                <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+                            </div>
+                        </div>
+                        <div class="pos-percentage font-data" style="margin: 8px 0;"><span id="turb-probit-val">-</span>%</div>
                         <div class="pos-bar-container">
                             <div id="turb-probit-bar" class="pos-bar-fill" style="width: 0%;"></div>
                         </div>
-                        <div class="probit-meta" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 12px; display: flex; justify-content: space-between; align-items: center; line-height: 1.4; width: 100%;">
+                        <div class="probit-meta" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; display: flex; justify-content: space-between; align-items: center; line-height: 1.4; width: 100%;">
                             <span>Threshold: 30.0%</span>
                             <span id="turb-probit-status" style="font-weight: 700; font-family: var(--font-sans);">NORMAL</span>
                         </div>
+                        <p class="probit-desc" data-i18n="turb_probit_desc" style="font-size: 0.68rem; color: var(--text-muted); margin: 8px 0 0 0; line-height: 1.35; border-top: 1px dashed var(--border-subtle); padding-top: 8px;">
+                            Predicts probability of a SPY drawdown &ge;15% in the next 3 months using VIX, Yield Curve (10y-3m), and Credit Spreads.
+                        </p>
                     </div>
 
                     <!-- Card 3: Checklist -->
@@ -639,7 +647,141 @@
         </div>
     </div>
 
+    <!-- Probit Detail Modal -->
+    <div id="probit-modal" class="modal-overlay">
+        <div class="modal-card surface-card probit-modal-card">
+            <header class="modal-header">
+                <div class="modal-title-section">
+                    <h2 data-i18n="probit_modal_title">Probit Model Mathematics & Calculations</h2>
+                    <div class="company-subinfo" data-i18n="probit_modal_subtitle">
+                        Predictive probability model of S&P 500 (SPY) 3-month drawdown &ge;15%
+                    </div>
+                </div>
+                <button class="close-modal-btn" aria-label="Close modal" id="close-probit-modal-btn"><i data-lucide="x"></i></button>
+            </header>
+
+            <div class="modal-body probit-modal-body">
+                <!-- Left Column: Math Formula & Live Breakdown -->
+                <div class="modal-left-col" style="gap: 16px;">
+                    <!-- Equation block -->
+                    <div class="modal-detail-panel" style="padding: 14px; border-radius: 6px; background: var(--surface-muted); border: 1px solid var(--border);">
+                        <h3 data-i18n="probit_formula_title" style="margin-top: 0; margin-bottom: 8px; font-size: 0.85rem; color: var(--brand-gold);">Model Equation</h3>
+                        <p data-i18n="probit_formula_desc" style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 12px;">
+                            Linear score Z is computed from Z-standardized inputs, then mapped to a probability P via the Sigmoid function:
+                        </p>
+                        <div style="font-family: var(--font-mono); font-size: 0.72rem; padding: 12px; background: #000; border-radius: 4px; border: 1px solid var(--border-strong); line-height: 1.6; text-align: center; color: var(--primary);">
+                            Z = 0.5866 * Z<sub>VIX</sub> + 0.3149 * Z<sub>YC</sub> - 0.1970 * Z<sub>CS</sub> - 2.7147
+                            <br>
+                            P(Crash) = 1 / (1 + e<sup>-Z</sup>)
+                        </div>
+                    </div>
+
+                    <!-- Table breakdown -->
+                    <div class="modal-detail-panel" style="margin-top: 4px;">
+                        <h3 data-i18n="probit_breakdown_title" style="margin-top: 0; margin-bottom: 12px; font-size: 0.85rem; color: var(--brand-gold);">Live Parameter Breakdown</h3>
+                        <div class="table-container" style="overflow-x: auto; background: var(--surface); border-radius: 6px; border: 1px solid var(--border);">
+                            <table class="premium-table" style="font-size: 0.72rem; border-collapse: collapse; width: 100%;">
+                                <thead>
+                                    <tr style="background: var(--surface-muted);">
+                                        <th data-i18n="probit_tbl_var" style="padding: 8px; text-align: left;">Variable</th>
+                                        <th data-i18n="probit_tbl_raw" style="padding: 8px; text-align: right;">Raw</th>
+                                        <th data-i18n="probit_tbl_mean" style="padding: 8px; text-align: right;">Mean (μ)</th>
+                                        <th data-i18n="probit_tbl_std" style="padding: 8px; text-align: right;">Std Dev (σ)</th>
+                                        <th data-i18n="probit_tbl_z" style="padding: 8px; text-align: right; color: var(--primary);">Z-Score</th>
+                                        <th data-i18n="probit_tbl_weight" style="padding: 8px; text-align: right;">Weight (w)</th>
+                                        <th data-i18n="probit_tbl_contrib" style="padding: 8px; text-align: right; color: var(--brand-gold); font-weight: 700;">Contribution</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                                        <td data-i18n="probit_vix_name" style="padding: 8px; font-weight: 600;">VIX (Equity Panic)</td>
+                                        <td id="probit-m-vix-raw" class="font-data" style="padding: 8px; text-align: right;">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">19.82</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">8.35</td>
+                                        <td id="probit-m-vix-z" class="font-data" style="padding: 8px; text-align: right; color: var(--primary);">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right;">0.5866</td>
+                                        <td id="probit-m-vix-contrib" class="font-data" style="padding: 8px; text-align: right; color: var(--brand-gold); font-weight: 600;">-</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                                        <td data-i18n="probit_yc_name" style="padding: 8px; font-weight: 600;">Yield Curve (10Y-3M)</td>
+                                        <td id="probit-m-yc-raw" class="font-data" style="padding: 8px; text-align: right;">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">1.43</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">1.28</td>
+                                        <td id="probit-m-yc-z" class="font-data" style="padding: 8px; text-align: right; color: var(--primary);">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right;">0.3149</td>
+                                        <td id="probit-m-yc-contrib" class="font-data" style="padding: 8px; text-align: right; color: var(--brand-gold); font-weight: 600;">-</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                                        <td data-i18n="probit_cs_name" style="padding: 8px; font-weight: 600;">Credit Spread Proxy</td>
+                                        <td id="probit-m-cs-raw" class="font-data" style="padding: 8px; text-align: right;">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">4.74</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right; color: var(--text-muted);">0.76</td>
+                                        <td id="probit-m-cs-z" class="font-data" style="padding: 8px; text-align: right; color: var(--primary);">-</td>
+                                        <td class="font-data" style="padding: 8px; text-align: right;">-0.1970</td>
+                                        <td id="probit-m-cs-contrib" class="font-data" style="padding: 8px; text-align: right; color: var(--brand-gold); font-weight: 600;">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Summary calculation -->
+                    <div class="modal-detail-panel" style="margin-top: 4px;">
+                        <h3 data-i18n="probit_summary_title" style="margin-top: 0; margin-bottom: 10px; font-size: 0.85rem; color: var(--brand-gold);">Calculation Summary</h3>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <div style="background: var(--surface); border: 1px solid var(--border); padding: 10px; border-radius: 4px;">
+                                <span data-i18n="probit_lbl_intercept" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Intercept (Bias)</span>
+                                <div class="font-data" style="font-size: 1rem; font-weight: 700; margin-top: 2px;">-2.7147</div>
+                            </div>
+                            <div style="background: var(--surface); border: 1px solid var(--border); padding: 10px; border-radius: 4px;">
+                                <span data-i18n="probit_lbl_zscore" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Weighted Sum (Z)</span>
+                                <div id="probit-m-zscore" class="font-data" style="font-size: 1rem; font-weight: 700; margin-top: 2px; color: var(--primary);">-</div>
+                            </div>
+                            <div style="background: var(--surface); border: 1px solid var(--border); padding: 10px; border-radius: 4px;">
+                                <span data-i18n="probit_lbl_prob" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Crash Probability (P)</span>
+                                <div id="probit-m-probability" class="font-data" style="font-size: 1.15rem; font-weight: 800; margin-top: 2px; color: var(--brand-gold);">-</div>
+                            </div>
+                            <div style="background: var(--surface); border: 1px solid var(--border); padding: 10px; border-radius: 4px;">
+                                <span data-i18n="probit_lbl_threshold" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">Warning Threshold</span>
+                                <div class="font-data" style="font-size: 1.15rem; font-weight: 800; margin-top: 2px; color: var(--text-muted);">30.0%</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; background: var(--surface-muted); border: 1px solid var(--border); padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                            <span data-i18n="probit_lbl_verdict" style="font-size: 0.75rem; font-weight: 600;">Model Verdict:</span>
+                            <span id="probit-m-verdict" style="font-size: 0.85rem; font-family: var(--font-mono); font-weight: 700;">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Explanations -->
+                <div class="modal-right-col" style="gap: 16px; border-left: 1px solid var(--border); padding-left: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div class="modal-detail-panel">
+                        <h3 data-i18n="probit_vars_title" style="margin-top: 0; margin-bottom: 12px; font-size: 0.85rem; color: var(--brand-gold);">Input Variable Definitions</h3>
+                        <ul style="font-size: 0.72rem; color: var(--text-muted); padding-left: 16px; margin: 0; display: flex; flex-direction: column; gap: 10px; line-height: 1.45;">
+                            <li id="probit-vix-desc-li" data-i18n="probit_vix_desc">
+                                <strong>VIX Index:</strong> Measures CBOE S&P 500 30-day implied volatility. Higher VIX indicates options traders expect high near-term fluctuations. A positive weight (+0.5866) indicates market panic significantly raises crash probability.
+                            </li>
+                            <li id="probit-yc-desc-li" data-i18n="probit_yc_desc">
+                                <strong>Yield Curve (10Y - 3M Treasury Spread):</strong> Measures economic cycle transitions. When inverted (negative), it is a classic recession predictor. A positive weight (+0.3149) plays a role in identifying macro cycle vulnerability in conjunction with VIX and Credit Spreads.
+                            </li>
+                            <li id="probit-cs-desc-li" data-i18n="probit_cs_desc">
+                                <strong>Credit Spread Proxy (3 * IEF / HYG):</strong> Ratio of long-term US Treasury bonds (safety) to high yield corporate bonds (risk), scaled by 3.0. A rising ratio indicates flight to safety and credit market stress. A negative weight (-0.1970) adjusts model sensitivity under multi-variable scenarios.
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="modal-detail-panel" style="border-top: 1px dashed var(--border-subtle); padding-top: 16px; margin-top: auto;">
+                        <h3 data-i18n="probit_method_title" style="margin-top: 0; margin-bottom: 8px; font-size: 0.85rem; color: var(--brand-gold);">Quantitative Methodology</h3>
+                        <p data-i18n="probit_method_desc" style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
+                            The Probit Composite Crash Probability model is optimized using historical market stress indicators since 2005. When the calculated probability exceeds the 30.0% threshold, the system triggers a 'Risk-Off' state, capping the risk portfolio allocation to protect assets during high-correlation selloffs.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- App Scripts -->
-    <script src="app.js"></script>
+    <script src="app.js?v=1.0.1"></script>
 </body>
 </html>

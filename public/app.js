@@ -324,6 +324,34 @@ document.addEventListener('DOMContentLoaded', () => {
             last_updated: "Last updated",
             turb_dz_history_title: "Historical Danger Zone Activations",
             turb_probit_title: "Probit Crash Probability",
+            turb_probit_desc: "Estimates the probability of a SPY drawdown &ge;15% in the next 3 months using VIX, Yield Curve (10Y-3M), and Credit Spreads.",
+            probit_modal_title: "Probit Model Mathematics & Calculations",
+            probit_modal_subtitle: "Predictive probability model of S&P 500 (SPY) 3-month drawdown &ge;15%",
+            probit_formula_title: "Model Equation",
+            probit_formula_desc: "Linear score Z is computed from Z-standardized inputs, then mapped to a probability P via the Sigmoid function:",
+            probit_breakdown_title: "Live Parameter Breakdown",
+            probit_tbl_var: "Variable",
+            probit_tbl_raw: "Raw",
+            probit_tbl_mean: "Mean (μ)",
+            probit_tbl_std: "Std Dev (σ)",
+            probit_tbl_z: "Z-Score",
+            probit_tbl_weight: "Weight (w)",
+            probit_tbl_contrib: "Contribution",
+            probit_vix_name: "VIX (Equity Panic)",
+            probit_yc_name: "Yield Curve (10Y-3M)",
+            probit_cs_name: "Credit Spread Proxy",
+            probit_summary_title: "Calculation Summary",
+            probit_lbl_intercept: "Intercept (Bias)",
+            probit_lbl_zscore: "Weighted Sum (Z)",
+            probit_lbl_prob: "Crash Probability (P)",
+            probit_lbl_threshold: "Warning Threshold",
+            probit_lbl_verdict: "Model Verdict",
+            probit_vars_title: "Input Variable Definitions",
+            probit_vix_desc: "<strong>VIX Index:</strong> Measures CBOE S&P 500 30-day implied volatility. Higher VIX indicates options traders expect high near-term fluctuations. A positive weight (+0.5866) indicates market panic significantly raises crash probability.",
+            probit_yc_desc: "<strong>Yield Curve (10Y - 3M Treasury Spread):</strong> Measures economic cycle transitions. When inverted (negative), it is a classic recession predictor. A positive weight (+0.3149) plays a role in identifying macro cycle vulnerability in conjunction with VIX and Credit Spreads.",
+            probit_cs_desc: "<strong>Credit Spread Proxy (3 * IEF / HYG):</strong> Ratio of long-term US Treasury bonds (safety) to high yield corporate bonds (risk), scaled by 3.0. A rising ratio indicates flight to safety and credit market stress. A negative weight (-0.1970) adjusts model sensitivity under multi-variable scenarios.",
+            probit_method_title: "Quantitative Methodology",
+            probit_method_desc: "The Probit Composite Crash Probability model is optimized using historical market stress indicators since 2005. When the calculated probability exceeds the 30.0% threshold, the system triggers a 'Risk-Off' state, capping the risk portfolio allocation to protect assets during high-correlation selloffs.",
             turb_disclaimer: "Disclaimer: This tool is for educational and informational purposes only. It does not constitute investment advice, solicitation, or recommendation to buy or sell any securities. Past performance is not indicative of future results. Always consult a qualified financial advisor before making investment decisions."
         },
         zh: {
@@ -491,6 +519,34 @@ document.addEventListener('DOMContentLoaded', () => {
             last_updated: "最后更新时间",
             turb_dz_history_title: "历史 Danger Zone 预警触发记录",
             turb_probit_title: "Probit 复合崩盘概率",
+            turb_probit_desc: "利用 VIX 恐慌指数、国债期限利差 (10Y-3M) 及信用利差代理指标，预测美股未来 3 个月内发生大幅暴跌 (跌幅 &ge;15%) 的概率。",
+            probit_modal_title: "Probit 复合崩盘概率模型算法数学计算",
+            probit_modal_subtitle: "预测未来 3 个月内标普500 (SPY) 发生大幅暴跌 (跌幅 &ge;15%) 的量化概率模型",
+            probit_formula_title: "模型数学公式",
+            probit_formula_desc: "首先将输入指标进行 Z-score 标准化，计算线性累计得分 Z，最后通过 Sigmoid 激活函数映射为崩盘概率 P：",
+            probit_breakdown_title: "实时参数贡献拆解",
+            probit_tbl_var: "输入变量",
+            probit_tbl_raw: "原始数值",
+            probit_tbl_mean: "历史均值 (μ)",
+            probit_tbl_std: "历史标准差 (σ)",
+            probit_tbl_z: "标准化 Z-Score",
+            probit_tbl_weight: "回归权重 (w)",
+            probit_tbl_contrib: "指标贡献度",
+            probit_vix_name: "VIX 恐慌指数 (股市波幅)",
+            probit_yc_name: "国债期限利差 (10Y-3M)",
+            probit_cs_name: "信用利差代理指标 (IEF/HYG)",
+            probit_summary_title: "模型计算汇总",
+            probit_lbl_intercept: "模型截距偏置 (Intercept)",
+            probit_lbl_zscore: "回归累计得分 (Z)",
+            probit_lbl_prob: "模型输出崩盘概率 (P)",
+            probit_lbl_threshold: "崩盘预警阀值 (Threshold)",
+            probit_lbl_verdict: "模型诊断结论",
+            probit_vars_title: "输入特征定义与意义",
+            probit_vix_desc: "<strong>VIX 恐慌指数：</strong> 测量标普500指数未来30天的市场隐含波动率。VIX 飙升代表市场期权交易者存在极度恐慌与流动性压力。模型赋予其高达 <strong>+0.5866</strong> 的正权重，说明市场恐慌能显著推高崩盘概率。",
+            probit_yc_desc: "<strong>期限利差 (10年期-3个月期国债利差)：</strong> 经典的宏观经济周期与衰退领先指标。当利差倒挂（为负）时，通常预示经济进入下行或衰退期。正系数 <strong>+0.3149</strong> 在协方差模型中主要捕获周期性脆弱节点。",
+            probit_cs_desc: "<strong>信用利差代理指标 (3 * IEF / HYG)：</strong> 7-10年期美国国债价格 (无风险安全资产) 与高收益企业债价格 (风险资产) 的比值（乘以3以对齐基准）。该比值上升代表资金发生“避险转移”，企业债信用利差走阔、信用环境恶化。负权重 <strong>-0.1970</strong> 在多变量环境下起到对灵敏度的修正与调节作用。",
+            probit_method_title: "量化模型决策方法",
+            probit_method_desc: "该 Probit 复合模型使用 2005 年以来的历史金融周期危机样本进行稳健参数优化。当计算得到的复合崩盘概率超过 <strong>30.0%</strong> 警戒线时，系统会强制激活 'Risk-Off' 警戒机制，并对仓位上限执行动态硬顶封顶（例如根据概率回吐仓位额度），以在系统性联动暴跌中保全资金。",
             turb_disclaimer: "免责声明：本工具仅用于学术研究与信息展示，不构成任何投资建议、邀约或买卖证券推荐。历史业绩不代表未来表现。在做出投资决策前，请务必咨询专业金融顾问。"
         }
     };
@@ -818,6 +874,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('sector-modal').classList.remove('active');
             }
         });
+
+        // Close Probit Modal events
+        const closeProbitBtn = document.getElementById('close-probit-modal-btn');
+        if (closeProbitBtn) {
+            closeProbitBtn.addEventListener('click', () => {
+                document.getElementById('probit-modal').classList.remove('active');
+            });
+        }
+        const probitModalEl = document.getElementById('probit-modal');
+        if (probitModalEl) {
+            probitModalEl.addEventListener('click', (e) => {
+                if (e.target.id === 'probit-modal') {
+                    probitModalEl.classList.remove('active');
+                }
+            });
+        }
+
+        // Open Probit Modal event
+        const probitTrigger = document.querySelector('.probit-tooltip-trigger');
+        if (probitTrigger) {
+            probitTrigger.addEventListener('click', () => {
+                const probitModal = document.getElementById('probit-modal');
+                if (probitModal) {
+                    probitModal.classList.add('active');
+                    updateProbitModalData();
+                }
+            });
+        }
 
         // Chart Type Switcher events
         const chartStaticBtn = document.getElementById('chart-static-btn');
@@ -2179,6 +2263,59 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 5. Render Chart
         renderTurbulenceChart(payload.chart_series);
+    }
+
+    function updateProbitModalData() {
+        if (!currentTurbulenceData || !currentTurbulenceData.status || !currentTurbulenceData.status.probit) {
+            return;
+        }
+        const probit = currentTurbulenceData.status.probit;
+
+        // VIX
+        const vixRawEl = document.getElementById('probit-m-vix-raw');
+        const vixZEl = document.getElementById('probit-m-vix-z');
+        const vixContribEl = document.getElementById('probit-m-vix-contrib');
+        if (vixRawEl) vixRawEl.textContent = probit.vix_raw !== undefined ? probit.vix_raw.toFixed(2) : '-';
+        if (vixZEl) vixZEl.textContent = probit.x_vix !== undefined ? probit.x_vix.toFixed(4) : '-';
+        if (vixContribEl) vixContribEl.textContent = probit.x_vix !== undefined ? (probit.x_vix * 0.586576).toFixed(4) : '-';
+
+        // Yield Curve
+        const ycRawEl = document.getElementById('probit-m-yc-raw');
+        const ycZEl = document.getElementById('probit-m-yc-z');
+        const ycContribEl = document.getElementById('probit-m-yc-contrib');
+        if (ycRawEl) ycRawEl.textContent = probit.yc_raw !== undefined ? probit.yc_raw.toFixed(2) : '-';
+        if (ycZEl) ycZEl.textContent = probit.x_yc !== undefined ? probit.x_yc.toFixed(4) : '-';
+        if (ycContribEl) ycContribEl.textContent = probit.x_yc !== undefined ? (probit.x_yc * 0.314905).toFixed(4) : '-';
+
+        // Credit Spread
+        const csRawEl = document.getElementById('probit-m-cs-raw');
+        const csZEl = document.getElementById('probit-m-cs-z');
+        const csContribEl = document.getElementById('probit-m-cs-contrib');
+        if (csRawEl) csRawEl.textContent = probit.cs_raw !== undefined ? probit.cs_raw.toFixed(2) : '-';
+        if (csZEl) csZEl.textContent = probit.x_cs !== undefined ? probit.x_cs.toFixed(4) : '-';
+        if (csContribEl) csContribEl.textContent = probit.x_cs !== undefined ? (probit.x_cs * -0.196963).toFixed(4) : '-';
+
+        // Intercept, Z, Prob, Threshold, Verdict
+        const zscoreEl = document.getElementById('probit-m-zscore');
+        const probEl = document.getElementById('probit-m-probability');
+        const verdictEl = document.getElementById('probit-m-verdict');
+
+        if (zscoreEl) zscoreEl.textContent = probit.z_value !== undefined ? probit.z_value.toFixed(4) : '-';
+        if (probEl) {
+            const probPct = probit.probability !== undefined ? (probit.probability * 100).toFixed(2) : '-';
+            probEl.textContent = probPct + '%';
+        }
+        if (verdictEl) {
+            if (probit.is_warning) {
+                verdictEl.textContent = activeLang === 'zh' ? '崩盘预警 (Risk-Off)' : 'CRASH WARNING (RISK-OFF)';
+                verdictEl.style.color = '#e71d36';
+                verdictEl.style.fontWeight = 'bold';
+            } else {
+                verdictEl.textContent = activeLang === 'zh' ? '正常' : 'NORMAL';
+                verdictEl.style.color = '#2ec4b6';
+                verdictEl.style.fontWeight = 'bold';
+            }
+        }
     }
 
     function filterSeriesByRange(series, range) {

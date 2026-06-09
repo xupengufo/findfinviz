@@ -2081,4 +2081,32 @@ html[data-theme=dark] .tech-score-low {
     }
 }
 
+/* Probit Modal Drill-Down Layout */
+.probit-modal-card {
+    max-width: 850px !important;
+    width: 95% !important;
+}
+
+.probit-modal-body {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 24px;
+    max-height: 75vh;
+    overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    .probit-modal-body {
+        grid-template-columns: 1fr;
+    }
+    .probit-modal-body .modal-right-col {
+        border-left: none !important;
+        padding-left: 0 !important;
+        border-top: 1px dashed var(--border);
+        padding-top: 16px;
+        margin-top: 16px;
+    }
+}
+
+
 
