@@ -1818,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const posVal = document.getElementById('turb-pos-val');
         const posBar = document.getElementById('turb-pos-bar');
         
-        if (posVal) posVal.textContent = `${status.position_size_pct}%`;
+        if (posVal) posVal.textContent = status.position_size_pct;
         if (posBar) {
             posBar.style.width = `${status.position_size_pct}%`;
             posBar.style.backgroundColor = status.state_color;
