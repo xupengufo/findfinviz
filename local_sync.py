@@ -296,9 +296,9 @@ def get_ew_cov_and_mean(history, halflife=63):
     
     return weighted_mean, cov_matrix
 
-def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False):
+def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False, probit_warning=False):
     """Map normalized distance x to a target position size using a smooth sigmoid."""
-    if danger_zone_active or any_complacency or credit_stressed:
+    if danger_zone_active or any_complacency or credit_stressed or probit_warning:
         min_pos = 25.0
     else:
         min_pos = 50.0
@@ -314,7 +314,7 @@ SECTOR_TICKERS = ["XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU",
 
 def calculate_market_turbulence():
     print("Fetching historical data for Macro + Sector ETFs + Volatility indexes...")
-    all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD"]))
+    all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD", "^TNX", "^IRX"]))
     
     def do_download():
         df = yf.download(all_tickers, period="10y", progress=False)
@@ -336,6 +336,9 @@ def calculate_market_turbulence():
     move_series = df_prices["^MOVE"]
     lqd_series = df_prices["LQD"]
     hyg_series = df_prices["HYG"]
+    tnx_series = df_prices["^TNX"]
+    irx_series = df_prices["^IRX"]
+    ief_series = df_prices["IEF"]
     
     spy_sma50 = spy_series.rolling(window=50).mean()
     
@@ -438,6 +441,10 @@ def calculate_market_turbulence():
             "credit_rolling_mean": float(credit_rolling_mean.loc[current_date]),
             "credit_rolling_std": float(credit_rolling_std.loc[current_date]),
             "credit_dynamic_threshold": float(credit_dynamic_threshold.loc[current_date]),
+            "tnx_level": float(tnx_series.loc[current_date]),
+            "irx_level": float(irx_series.loc[current_date]),
+            "ief_level": float(ief_series.loc[current_date]),
+            "hyg_level": float(hyg_series.loc[current_date]),
             "macro_contrib": macro_contrib_dict,
             "sector_contrib": sector_contrib_dict,
             "macro_returns": macro_ret_dict,
@@ -459,6 +466,23 @@ def calculate_market_turbulence():
     df_result['macro_extreme'] = df_result['macro_extreme'].ffill().bfill().fillna(4.0)
     df_result['sector_warn'] = df_result['sector_warn'].ffill().bfill().fillna(2.0)
     df_result['sector_extreme'] = df_result['sector_extreme'].ffill().bfill().fillna(4.0)
+    
+    # Calculate Probit Composite Warning Model features
+    df_result['vix_raw'] = df_result['vix_level']
+    df_result['yc_raw'] = df_result['tnx_level'] - df_result['irx_level']
+    df_result['cs_raw'] = (df_result['ief_level'] / df_result['hyg_level']) * 3.0
+    
+    # Standardize features using the specified fitted mean and std parameters
+    df_result['x_vix'] = (df_result['vix_raw'] - 19.824264) / 8.345408
+    df_result['x_yc'] = (df_result['yc_raw'] - 1.433514) / 1.282213
+    df_result['x_cs'] = (df_result['cs_raw'] - 4.736405) / 0.762430
+    
+    # Linear activation
+    df_result['probit_z'] = 0.586576 * df_result['x_vix'] + 0.314905 * df_result['x_yc'] - 0.196963 * df_result['x_cs'] - 2.714673
+    
+    # Sigmoid function maps linear combination to [0, 1] probability
+    df_result['probit_prob'] = 1.0 / (1.0 + np.exp(-df_result['probit_z']))
+    df_result['probit_warning'] = df_result['probit_prob'] > 0.30
     
     return df_result
 
@@ -486,7 +510,13 @@ def process_turbulence_output(df_result):
         else:
             hx = 0.0
             
-        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed)
+        probit_warn = bool(row['probit_warning'])
+        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed, probit_warn)
+        if probit_warn:
+            # Dynamic cap on position size based on crash probability
+            probit_cap = 100.0 * (1.0 - float(row['probit_prob']))
+            raw_pos = min(raw_pos, probit_cap)
+            
         raw_positions.append(raw_pos)
         
     df_result['position_raw'] = raw_positions
@@ -512,14 +542,19 @@ def process_turbulence_output(df_result):
         state = "CRITICAL"
     elif danger_zone_active:
         state = "HIGH RISK"
+    elif bool(latest['probit_warning']):
+        if float(latest['probit_prob']) > 0.50:
+            state = "HIGH RISK"
+        else:
+            state = "ELEVATED RISK"
     elif macro_above_warn or sector_above_warn or credit_stressed:
         state = "ELEVATED RISK"
         
     state_flags = {
-        "normal": not (macro_above_warn or sector_above_warn or danger_zone_active or (latest['macro_slow'] > latest['macro_extreme']) or credit_stressed),
-        "elevated": bool(macro_above_warn or sector_above_warn or credit_stressed),
-        "high_risk": bool(danger_zone_active),
-        "critical": bool(latest['macro_slow'] > latest['macro_extreme'])
+        "normal": state == "NORMAL",
+        "elevated": state == "ELEVATED RISK",
+        "high_risk": state == "HIGH RISK",
+        "critical": state == "CRITICAL"
     }
         
     state_colors = {
@@ -570,7 +605,9 @@ def process_turbulence_output(df_result):
             "credit_dynamic_threshold": round(float(row['credit_dynamic_threshold']), 3),
             "danger_zone": dz,
             "credit_stressed": c_stressed,
-            "position_size_pct": int(round(row['position_smoothed']))
+            "position_size_pct": int(round(row['position_smoothed'])),
+            "probit_prob": round(float(row['probit_prob']), 4),
+            "probit_warning": bool(row['probit_warning'])
         })
         
     dz_periods = []
@@ -700,6 +737,17 @@ def process_turbulence_output(df_result):
             },
             "divergence": {
                 "active": danger_zone_active
+            },
+            "probit": {
+                "probability": round(float(latest['probit_prob']), 4),
+                "is_warning": bool(latest['probit_warning']),
+                "z_value": round(float(latest['probit_z']), 4),
+                "vix_raw": round(float(latest['vix_raw']), 4),
+                "yc_raw": round(float(latest['yc_raw']), 4),
+                "cs_raw": round(float(latest['cs_raw']), 4),
+                "x_vix": round(float(latest['x_vix']), 4),
+                "x_yc": round(float(latest['x_yc']), 4),
+                "x_cs": round(float(latest['x_cs']), 4)
             },
             "macro_contributors": macro_contribs_list,
             "sector_contributors": sector_contribs_list

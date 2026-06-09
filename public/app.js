@@ -323,6 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             err_turbulence: "Error: Failed to fetch market turbulence metrics from API.",
             last_updated: "Last updated",
             turb_dz_history_title: "Historical Danger Zone Activations",
+            turb_probit_title: "Probit Crash Probability",
             turb_disclaimer: "Disclaimer: This tool is for educational and informational purposes only. It does not constitute investment advice, solicitation, or recommendation to buy or sell any securities. Past performance is not indicative of future results. Always consult a qualified financial advisor before making investment decisions."
         },
         zh: {
@@ -489,6 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             err_turbulence: "错误：无法从后台拉取市场协方差湍流数据。",
             last_updated: "最后更新时间",
             turb_dz_history_title: "历史 Danger Zone 预警触发记录",
+            turb_probit_title: "Probit 复合崩盘概率",
             turb_disclaimer: "免责声明：本工具仅用于学术研究与信息展示，不构成任何投资建议、邀约或买卖证券推荐。历史业绩不代表未来表现。在做出投资决策前，请务必咨询专业金融顾问。"
         }
     };
@@ -1824,6 +1826,29 @@ document.addEventListener('DOMContentLoaded', () => {
             posBar.style.backgroundColor = status.state_color;
         }
         
+        // 2.5 Update Probit Card
+        const probitVal = document.getElementById('turb-probit-val');
+        const probitBar = document.getElementById('turb-probit-bar');
+        const probitStatus = document.getElementById('turb-probit-status');
+        
+        if (status.probit) {
+            const probPct = (status.probit.probability * 100).toFixed(1);
+            if (probitVal) probitVal.textContent = probPct;
+            if (probitBar) {
+                probitBar.style.width = `${Math.min(100, status.probit.probability * 100)}%`;
+                probitBar.style.backgroundColor = status.probit.is_warning ? '#e71d36' : '#2ec4b6';
+            }
+            if (probitStatus) {
+                if (status.probit.is_warning) {
+                    probitStatus.textContent = activeLang === 'zh' ? '崩盘预警 (Risk-Off)' : 'CRASH WARNING (RISK-OFF)';
+                    probitStatus.style.color = '#e71d36';
+                } else {
+                    probitStatus.textContent = activeLang === 'zh' ? '正常' : 'NORMAL';
+                    probitStatus.style.color = '#2ec4b6';
+                }
+            }
+        }
+        
         // 3. Update Checklist (6 items)
         const macroIcon = document.getElementById('check-icon-macro');
         const macroVal = document.getElementById('check-val-macro');
@@ -2214,6 +2239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const slowWarn = filteredSeries.map(x => x.slow_warn);
         const slowExtreme = filteredSeries.map(x => x.slow_extreme);
         const spxPrices = filteredSeries.map(x => x.spx);
+        const probitProb = filteredSeries.map(x => x.probit_prob !== undefined ? (x.probit_prob * 100).toFixed(1) : 0);
         
         const ctx = canvas.getContext('2d');
         turbulenceChartInstance = new Chart(ctx, {
@@ -2275,6 +2301,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         pointRadius: 0,
                         pointHoverRadius: 4,
                         yAxisID: 'y1'
+                    },
+                    {
+                        label: activeLang === 'zh' ? 'Probit 崩盘概率 (%)' : 'Probit Crash Probability (%)',
+                        data: probitProb,
+                        borderColor: '#a855f7', // Purple
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        yAxisID: 'y2'
                     }
                 ]
             },
@@ -2340,6 +2375,32 @@ document.addEventListener('DOMContentLoaded', () => {
                                 size: 10
                             }
                         }
+                    },
+                    y2: {
+                        position: 'left',
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        title: {
+                            display: true,
+                            text: activeLang === 'zh' ? '崩盘概率 (%)' : 'Crash Probability (%)',
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        ticks: {
+                            color: textColor,
+                            callback: function(value) {
+                                return value + '%';
+                            },
+                            font: {
+                                family: 'JetBrains Mono',
+                                size: 10
+                            }
+                        },
+                        min: 0,
+                        max: 100
                     }
                 },
                 plugins: {
