@@ -1947,17 +1947,20 @@ html[data-theme=dark] .tech-score-low {
 }
 
 .turb-checklist-list li {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
     gap: 8px;
+    align-items: flex-start;
     font-size: 0.8rem;
     color: var(--text-secondary);
+    line-height: 1.4;
 }
 
 .turb-checklist-list li .check-icon {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .turb-checklist-list li .check-icon.met {
@@ -1973,11 +1976,13 @@ html[data-theme=dark] .tech-score-low {
 }
 
 .turb-checklist-list li .font-data {
-    margin-left: auto;
+    margin-left: 8px;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-primary);
+    white-space: nowrap;
+    text-align: right;
 }
 
 .verdict-banner {
