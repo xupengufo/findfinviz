@@ -1543,6 +1543,10 @@ html[data-theme=dark] .segmented button.active {
     background: linear-gradient(90deg, #d97706, #fbbf24);
 }
 
+.val-fill {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+
 /* Sector Modal Drill-Down Layout */
 .sector-modal-card {
     max-width: 900px !important;

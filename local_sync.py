@@ -90,6 +90,58 @@ from finvizfinance.insider import Insider
 from finvizfinance.screener.custom import Custom
 from finvizfinance.group.overview import Overview as GroupOverview
 
+SUPPORTED_SIGNALS = {
+    "oversold": "Oversold",
+    "overbought": "Overbought",
+    "double_bottom": "Double Bottom",
+    "wedge_up": "Wedge Up",
+    "wedge_down": "Wedge Down",
+    "triangle_ascending": "Triangle Ascending",
+    "top_gainers": "Top Gainers",
+    "top_losers": "Top Losers",
+    "new_high": "New High",
+    "most_active": "Most Active",
+    "most_volatile": "Most Volatile",
+    "unusual_volume": "Unusual Volume",
+    "upgrades": "Upgrades",
+    "downgrades": "Downgrades",
+    "earnings_before": "Earnings Before",
+    "earnings_after": "Earnings After",
+    "recent_insider_buying": "Recent Insider Buying",
+    "high_short_interest": "high_short_interest",
+    "pullback": "pullback",
+    "breakout_candidate": "breakout_candidate",
+    "quality_compounder": "quality_compounder"
+}
+
+CUSTOM_FILTERS = {
+    "high_short_interest": {"Float Short": "Over 15%"},
+    "pullback": {
+        "50-Day Simple Moving Average": "Price above SMA50",
+        "200-Day Simple Moving Average": "Price above SMA200",
+        "RSI (14)": "Not Overbought (<50)"
+    },
+    "breakout_candidate": {
+        "52-Week High/Low": "0-5% below High",
+        "Relative Volume": "Over 1.5"
+    },
+    "quality_compounder": {
+        "Return on Equity": "Over +20%",
+        "Debt/Equity": "Under 0.5",
+        "EPS growth this year": "Over 10%",
+        "Gross Margin": "Positive (>0%)",
+        "P/E": "Profitable (>0)"
+    }
+}
+
+SCREENER_COLUMNS = [0, 1, 2, 3, 4, 6, 7, 8, 9, 13, 30, 33, 38, 64, 65, 66, 67]
+
+def apply_signal_filter(fcustom, sig_key, sig_val):
+    if sig_key in CUSTOM_FILTERS:
+        fcustom.set_filter(filters_dict=CUSTOM_FILTERS[sig_key])
+    else:
+        fcustom.set_filter(signal=sig_val)
+
 def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV for safety
     val_str = json.dumps(data)
     if is_redis:
@@ -137,65 +189,18 @@ def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV fo
             return False
 
 def sync_opportunities():
-    signals = {
-        "oversold": "Oversold",
-        "overbought": "Overbought",
-        "double_bottom": "Double Bottom",
-        "wedge_up": "Wedge Up",
-        "wedge_down": "Wedge Down",
-        "triangle_ascending": "Triangle Ascending",
-        "top_gainers": "Top Gainers",
-        "top_losers": "Top Losers",
-        "new_high": "New High",
-        "most_active": "Most Active",
-        "most_volatile": "Most Volatile",
-        "unusual_volume": "Unusual Volume",
-        "upgrades": "Upgrades",
-        "downgrades": "Downgrades",
-        "earnings_before": "Earnings Before",
-        "earnings_after": "Earnings After",
-        "recent_insider_buying": "Recent Insider Buying",
-        "high_short_interest": "high_short_interest",
-        "pullback": "pullback",
-        "breakout_candidate": "breakout_candidate",
-        "quality_compounder": "quality_compounder",
-        "overbought": "Overbought",
-        "wedge_up": "Wedge Up",
-        "wedge_down": "Wedge Down"
-    }
-    
-    for key, signal_name in signals.items():
+    for key, signal_name in SUPPORTED_SIGNALS.items():
         print(f"Scraping opportunities for signal: {signal_name}...")
 
         def do_scrape(sig_key=key, sig_val=signal_name):
             fcustom = Custom()
-            if sig_key == "high_short_interest":
-                fcustom.set_filter(filters_dict={"Float Short": "Over 15%"})
-            elif sig_key == "pullback":
-                fcustom.set_filter(filters_dict={
-                    "50-Day Simple Moving Average": "Price above SMA50",
-                    "200-Day Simple Moving Average": "Price above SMA200",
-                    "RSI (14)": "Not Overbought (<50)"
-                })
-            elif sig_key == "breakout_candidate":
-                fcustom.set_filter(filters_dict={
-                    "52-Week High/Low": "0-5% below High",
-                    "Relative Volume": "Over 1.5"
-                })
-            elif sig_key == "quality_compounder":
-                fcustom.set_filter(filters_dict={
-                    "Return on Equity": "Over +15%",
-                    "Debt/Equity": "Under 1",
-                    "P/E": "Profitable (>0)"
-                })
-            else:
-                fcustom.set_filter(signal=sig_val)
+            apply_signal_filter(fcustom, sig_key, sig_val)
             return fcustom.screener_view(
                 limit=100, 
                 order="Market Cap.", 
                 ascend=False, 
                 verbose=0, 
-                columns=[0, 1, 2, 3, 4, 6, 7, 30, 33, 38, 64, 65, 66, 67]
+                columns=SCREENER_COLUMNS
             )
 
         try:
@@ -472,10 +477,26 @@ def calculate_market_turbulence():
     df_result['yc_raw'] = df_result['tnx_level'] - df_result['irx_level']
     df_result['cs_raw'] = (df_result['ief_level'] / df_result['hyg_level']) * 3.0
     
-    # Standardize features using the specified fitted mean and std parameters
-    df_result['x_vix'] = (df_result['vix_raw'] - 19.824264) / 8.345408
-    df_result['x_yc'] = (df_result['yc_raw'] - 1.433514) / 1.282213
-    df_result['x_cs'] = (df_result['cs_raw'] - 4.736405) / 0.762430
+    # Standardize features using rolling fit parameters (504 trading days, approx 2 years)
+    vix_fit_mean = df_result['vix_raw'].rolling(504, min_periods=252).mean()
+    vix_fit_std  = df_result['vix_raw'].rolling(504, min_periods=252).std()
+    yc_fit_mean  = df_result['yc_raw'].rolling(504, min_periods=252).mean()
+    yc_fit_std   = df_result['yc_raw'].rolling(504, min_periods=252).std()
+    cs_fit_mean  = df_result['cs_raw'].rolling(504, min_periods=252).mean()
+    cs_fit_std   = df_result['cs_raw'].rolling(504, min_periods=252).std()
+
+    # Fallback to the original static parameters for the initial periods where rolling is not fully populated
+    vix_fit_mean = vix_fit_mean.fillna(19.824264)
+    vix_fit_std  = vix_fit_std.fillna(8.345408)
+    yc_fit_mean  = yc_fit_mean.fillna(1.433514)
+    yc_fit_std   = yc_fit_std.fillna(1.282213)
+    cs_fit_mean  = cs_fit_mean.fillna(4.736405)
+    cs_fit_std   = cs_fit_std.fillna(0.762430)
+
+    # Use fillna + clip to protect against zero variance or NaNs
+    df_result['x_vix'] = ((df_result['vix_raw'] - vix_fit_mean) / vix_fit_std.clip(lower=1.0)).fillna(0)
+    df_result['x_yc']  = ((df_result['yc_raw'] - yc_fit_mean) / yc_fit_std.clip(lower=0.1)).fillna(0)
+    df_result['x_cs']  = ((df_result['cs_raw'] - cs_fit_mean) / cs_fit_std.clip(lower=0.1)).fillna(0)
     
     # Linear activation
     df_result['probit_z'] = 0.586576 * df_result['x_vix'] + 0.314905 * df_result['x_yc'] - 0.196963 * df_result['x_cs'] - 2.714673

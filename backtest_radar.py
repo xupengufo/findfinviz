@@ -21,9 +21,9 @@ def get_ew_cov_and_mean(history, halflife=63):
     cov_matrix = (centered.T * weights) @ centered / divisor
     return weighted_mean, cov_matrix
 
-def calculate_sigmoid_position(x, danger_zone_active, any_complacency):
+def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False, probit_warning=False):
     """Map normalized distance x to a target position size using a smooth sigmoid."""
-    if danger_zone_active or any_complacency:
+    if danger_zone_active or any_complacency or credit_stressed or probit_warning:
         min_pos = 25.0
     else:
         min_pos = 50.0
@@ -36,7 +36,7 @@ def calculate_sigmoid_position(x, danger_zone_active, any_complacency):
 def run_backtest():
     print("=== RISK RADAR BACKTEST FRAMEWORK ===")
     print("Fetching 10 years of historical data...")
-    all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD"]))
+    all_tickers = list(set(MACRO_TICKERS + SECTOR_TICKERS + ["^VIX", "^MOVE", "LQD", "^TNX", "^IRX"]))
     
     # Download data
     df = yf.download(all_tickers, period="10y", progress=False)
@@ -59,6 +59,9 @@ def run_backtest():
     move_series = df_prices["^MOVE"]
     lqd_series = df_prices["LQD"]
     hyg_series = df_prices["HYG"]
+    tnx_series = df_prices["^TNX"]
+    irx_series = df_prices["^IRX"]
+    ief_series = df_prices["IEF"]
     
     spy_sma50 = spy_series.rolling(window=50).mean()
     
@@ -133,7 +136,11 @@ def run_backtest():
             "credit_ratio": float(credit_ratio.loc[current_date]),
             "credit_dynamic_threshold": float(credit_dynamic_threshold.loc[current_date]),
             "credit_rolling_mean": float(credit_rolling_mean.loc[current_date]),
-            "credit_rolling_std": float(credit_rolling_std.loc[current_date])
+            "credit_rolling_std": float(credit_rolling_std.loc[current_date]),
+            "tnx_level": float(tnx_series.loc[current_date]),
+            "irx_level": float(irx_series.loc[current_date]),
+            "ief_level": float(ief_series.loc[current_date]),
+            "hyg_level": float(hyg_series.loc[current_date])
         })
         
     df_result = pd.DataFrame(turb_records)
@@ -149,6 +156,39 @@ def run_backtest():
     df_result['macro_warn'] = df_result['macro_warn'].ffill().bfill().fillna(2.0)
     df_result['macro_extreme'] = df_result['macro_extreme'].ffill().bfill().fillna(4.0)
     df_result['sector_warn'] = df_result['sector_warn'].ffill().bfill().fillna(2.0)
+    
+    # Calculate Probit Composite Warning Model features (aligned with local_sync.py)
+    df_result['vix_raw'] = df_result['vix_level']
+    df_result['yc_raw'] = df_result['tnx_level'] - df_result['irx_level']
+    df_result['cs_raw'] = (df_result['ief_level'] / df_result['hyg_level']) * 3.0
+    
+    # Standardize features using rolling fit parameters (504 trading days, approx 2 years)
+    vix_fit_mean = df_result['vix_raw'].rolling(504, min_periods=252).mean()
+    vix_fit_std  = df_result['vix_raw'].rolling(504, min_periods=252).std()
+    yc_fit_mean  = df_result['yc_raw'].rolling(504, min_periods=252).mean()
+    yc_fit_std   = df_result['yc_raw'].rolling(504, min_periods=252).std()
+    cs_fit_mean  = df_result['cs_raw'].rolling(504, min_periods=252).mean()
+    cs_fit_std   = df_result['cs_raw'].rolling(504, min_periods=252).std()
+
+    # Fallback to the original static parameters for the initial periods where rolling is not fully populated
+    vix_fit_mean = vix_fit_mean.fillna(19.824264)
+    vix_fit_std  = vix_fit_std.fillna(8.345408)
+    yc_fit_mean  = yc_fit_mean.fillna(1.433514)
+    yc_fit_std   = yc_fit_std.fillna(1.282213)
+    cs_fit_mean  = cs_fit_mean.fillna(4.736405)
+    cs_fit_std   = cs_fit_std.fillna(0.762430)
+
+    # Use fillna + clip to protect against zero variance or NaNs
+    df_result['x_vix'] = ((df_result['vix_raw'] - vix_fit_mean) / vix_fit_std.clip(lower=1.0)).fillna(0)
+    df_result['x_yc']  = ((df_result['yc_raw'] - yc_fit_mean) / yc_fit_std.clip(lower=0.1)).fillna(0)
+    df_result['x_cs']  = ((df_result['cs_raw'] - cs_fit_mean) / cs_fit_std.clip(lower=0.1)).fillna(0)
+    
+    # Linear activation
+    df_result['probit_z'] = 0.586576 * df_result['x_vix'] + 0.314905 * df_result['x_yc'] - 0.196963 * df_result['x_cs'] - 2.714673
+    
+    # Sigmoid function maps linear combination to [0, 1] probability
+    df_result['probit_prob'] = 1.0 / (1.0 + np.exp(-df_result['probit_z']))
+    df_result['probit_warning'] = df_result['probit_prob'] > 0.30
     
     # Precompute Danger Zone & Complacency & Position sizing
     danger_zone_list = []
@@ -169,6 +209,9 @@ def run_backtest():
         dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
         danger_zone_list.append(dz)
         
+        c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
+        probit_warn = bool(row['probit_warning'])
+        
         h_warn = row['macro_warn']
         h_extreme = row['macro_extreme']
         h_macro_slow = row['macro_slow']
@@ -177,7 +220,11 @@ def run_backtest():
         else:
             hx = 0.0
             
-        raw_pos = calculate_sigmoid_position(hx, dz, any_comp)
+        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed, probit_warn)
+        if probit_warn:
+            probit_cap = 100.0 * (1.0 - float(row['probit_prob']))
+            raw_pos = min(raw_pos, probit_cap)
+            
         raw_positions.append(raw_pos)
         
     df_result['danger_zone'] = danger_zone_list
@@ -323,8 +370,8 @@ The model successfully reduces max drawdown and stabilizes the portfolio's Sharp
     print("Saved local backtest report to backtest_report.md")
     
     # Save to artifacts directory
-    artifact_dir = "/Users/anthony/.gemini/antigravity/brain/4f21b720-bcee-4be8-b8c6-c396929a8a22"
-    if os.path.exists(artifact_dir):
+    artifact_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
+    if artifact_dir and os.path.exists(artifact_dir):
         artifact_path = os.path.join(artifact_dir, "backtest_report.md")
         with open(artifact_path, "w", encoding="utf-8") as f:
             f.write(report_md)

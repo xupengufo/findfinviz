@@ -12,7 +12,6 @@
     <script src="https://unpkg.com/lucide@0.460.0"></script>
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="styles.css?v=1.0.1">
 </head>
 <body>
     <div class="app-container">
@@ -526,7 +525,7 @@
                             <div class="breakdown-item">
                                 <div class="breakdown-label-row">
                                     <span data-i18n="breakdown_tech">Technical Structure</span>
-                                    <span id="breakdown-tech-val" class="font-data">0 / 40</span>
+                                    <span id="breakdown-tech-val" class="font-data">0 / 35</span>
                                 </div>
                                 <div class="breakdown-bar-bg">
                                     <div id="breakdown-tech-bar" class="breakdown-bar-fill tech-fill" style="width: 0%;"></div>
@@ -544,10 +543,19 @@
                             <div class="breakdown-item">
                                 <div class="breakdown-label-row">
                                     <span data-i18n="breakdown_sent">Market Sentiment & Flow</span>
-                                    <span id="breakdown-sent-val" class="font-data">0 / 25</span>
+                                    <span id="breakdown-sent-val" class="font-data">0 / 20</span>
                                 </div>
                                 <div class="breakdown-bar-bg">
                                     <div id="breakdown-sent-bar" class="breakdown-bar-fill sent-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <div class="breakdown-item">
+                                <div class="breakdown-label-row">
+                                    <span data-i18n="breakdown_val">Valuation</span>
+                                    <span id="breakdown-val-val" class="font-data">0 / 10</span>
+                                </div>
+                                <div class="breakdown-bar-bg">
+                                    <div id="breakdown-val-bar" class="breakdown-bar-fill val-fill" style="width: 0%;"></div>
                                 </div>
                             </div>
                         </div>
@@ -782,6 +790,6 @@
     </div>
 
     <!-- App Scripts -->
-    <script src="app.js?v=1.0.2"></script>
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>
