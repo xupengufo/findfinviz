@@ -283,34 +283,50 @@ export function renderTurbulence(payload) {
     }
     
     // Update Danger Zone History Panel
+    // P0-4: history items now carry peak_prob (Probit crash probability),
+    // not peak_turb. Also guard against missing fields defensively.
     const dzHistoryEl = document.getElementById('turb-dz-history');
     const dzHistoryListEl = document.getElementById('turb-dz-history-list');
     if (dzHistoryEl && dzHistoryListEl) {
         const history = payload.danger_zone_history || [];
         if (history.length > 0) {
+            const peakLabel = state.activeLang === 'zh' ? '峰值崩盘概率' : 'Peak Crash Prob';
+            const probHeader = state.activeLang === 'zh' ? '峰值崩盘概率' : 'Peak Crash Prob';
+            const startDateHeader = state.activeLang === 'zh' ? '开始日期' : 'Start Date';
+            const endDateHeader = state.activeLang === 'zh' ? '结束日期' : 'End Date';
+            const durationHeader = state.activeLang === 'zh' ? '持续时间' : 'Duration';
             dzHistoryEl.style.display = 'block';
             dzHistoryListEl.innerHTML = `
                 <table class="insider-table" style="width: 100%; font-size: 0.75rem; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 1px solid var(--border); text-align: left;">
-                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${state.activeLang === 'zh' ? '开始日期' : 'Start Date'}</th>
-                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${state.activeLang === 'zh' ? '结束日期' : 'End Date'}</th>
-                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${state.activeLang === 'zh' ? '持续时间' : 'Duration'}</th>
-                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500; text-align: right;">${state.activeLang === 'zh' ? '峰值阻尼指数' : 'Peak Turbulence'}</th>
+                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${startDateHeader}</th>
+                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${endDateHeader}</th>
+                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500;">${durationHeader}</th>
+                            <th style="padding: 8px 4px; color: var(--text-muted); font-weight: 500; text-align: right;">${probHeader}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${history.map(item => `
+                        ${history.map(item => {
+                            // P0-4 compat: prefer peak_prob, fall back to peak_turb for old cached data
+                            const peakVal = item.peak_prob != null ? item.peak_prob : item.peak_turb;
+                            const peakText = peakVal != null
+                                ? (item.peak_prob != null
+                                    ? `${(peakVal * 100).toFixed(1)}%`
+                                    : peakVal.toFixed(2))
+                                : '-';
+                            const peakColor = (item.peak_prob != null && peakVal > 0.5) ? '#e71d36' : '#d98a2b';
+                            return `
                             <tr style="border-bottom: 1px dashed var(--border);">
-                                <td style="padding: 8px 4px; font-family: var(--font-mono); font-weight: 500; color: #e71d36;">
-                                    <i data-lucide="alert-triangle" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 4px; color: #e71d36;"></i>
-                                    ${item.start_date}
+                                <td style="padding: 8px 4px; font-family: var(--font-mono); font-weight: 500; color: ${peakColor};">
+                                    <i data-lucide="alert-triangle" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 4px; color: ${peakColor};"></i>
+                                    ${item.start_date || '-'}
                                 </td>
-                                <td style="padding: 8px 4px; font-family: var(--font-mono);">${item.end_date}</td>
-                                <td style="padding: 8px 4px;">${item.duration_days} ${state.activeLang === 'zh' ? '天' : 'days'}</td>
-                                <td style="padding: 8px 4px; font-family: var(--font-mono); text-align: right; font-weight: 600;">${item.peak_turb.toFixed(2)}</td>
-                            </tr>
-                        `).join('')}
+                                <td style="padding: 8px 4px; font-family: var(--font-mono);">${item.end_date || '-'}</td>
+                                <td style="padding: 8px 4px;">${item.duration_days || '-'} ${state.activeLang === 'zh' ? '天' : 'days'}</td>
+                                <td style="padding: 8px 4px; font-family: var(--font-mono); text-align: right; font-weight: 600; color: ${peakColor};">${peakText}</td>
+                            </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
             `;
