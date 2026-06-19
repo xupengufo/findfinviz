@@ -18,6 +18,10 @@ if finviz_dir not in sys.path:
     sys.path.insert(0, finviz_dir)
 
 from local_sync import SUPPORTED_SIGNALS, CUSTOM_FILTERS, SCREENER_COLUMNS, apply_signal_filter
+from scoring_config import (
+    DIMENSION_CAPS, TECH_FACTORS, FUND_FACTORS, SENT_FACTORS,
+    VALUATION, RS_SCORING, MIN_SCORE, MIN_DIMENSIONS, LIQUIDITY_FLOOR
+)
 
 # Deferred imports for faster cold starts
 
@@ -533,17 +537,48 @@ def get_confluences():
 
     tickers_map = {}
 
+    def get_field(item, *possible_keys):
+        """Robustly fetch a field from a FinViz screener record.
+        FinViz HTML table headers inconsistently mix full names
+        ('Forward P/E') and abbreviations ('P/FCF', 'ROE'), so try
+        multiple candidates and return the first non-empty match."""
+        if not item:
+            return ""
+        for k in possible_keys:
+            v = item.get(k)
+            if v is not None and v != "" and str(v).lower() != "nan":
+                return v
+        return ""
+
     def get_or_create_ticker(ticker, company, sector, industry, price, change, mcap, pe, float_short, rel_vol, roe=None, debt_equity=None, item=None):
         t = ticker.upper()
         
-        # Extract valuation fields if item is provided
-        fwd_pe = item.get("Forward P/E") if item else ""
-        peg = item.get("PEG") if item else ""
-        p_fcf = item.get("P/FCF") if item else ""
+        # Extract valuation fields if item is provided (try common name variants)
+        fwd_pe = get_field(item, "Forward P/E", "Fwd P/E")
+        peg = get_field(item, "PEG")
+        p_fcf = get_field(item, "P/FCF", "P/Free Cash Flow")
+        
+        # Multi-day performance for TechScore momentum + Relative Strength (P0-1/P0-2)
+        perf_week = get_field(item, "Perf Week", "Performance (Week)")
+        perf_month = get_field(item, "Perf Month", "Performance (Month)")
+        perf_quarter = get_field(item, "Perf Quart", "Performance (Quarter)")
+        
+        # Average volume for ADTV liquidity filter (P0-3)
+        avg_volume = get_field(item, "Avg Volume", "Average Volume")
         
         if item:
-            if not roe: roe = item.get("ROE")
-            if not debt_equity: debt_equity = item.get("Debt/Eq")
+            if not roe: roe = get_field(item, "ROE", "Return on Equity")
+            if not debt_equity: debt_equity = get_field(item, "Debt/Eq", "Total Debt/Equity")
+
+        # Compute ADTV (Average Daily Trading Value) = avg_volume × price
+        adtv = ""
+        try:
+            av = float(avg_volume) if avg_volume else 0
+            pr = float(price) if price else 0
+            if av > 0 and pr > 0:
+                adtv = av * pr
+        except (ValueError, TypeError):
+            pass
 
         if t not in tickers_map:
             tickers_map[t] = {
@@ -562,6 +597,11 @@ def get_confluences():
                 "Rel Volume": rel_vol or "",
                 "ROE": roe or "",
                 "Debt/Eq": debt_equity or "",
+                "Perf Week": perf_week or "",
+                "Perf Month": perf_month or "",
+                "Perf Quarter": perf_quarter or "",
+                "Avg Volume": avg_volume or "",
+                "ADTV": adtv,
                 "Score": 0,
                 "TechScore": 0,
                 "Reasons": [],
@@ -583,7 +623,8 @@ def get_confluences():
                     "momentum_leader": False,
                     "analyst_downgrade": False,
                     "overbought": False,
-                    "bearish_momentum": False
+                    "bearish_momentum": False,
+                    "low_liquidity": False
                 }
             }
         entry = tickers_map[t]
@@ -601,6 +642,11 @@ def get_confluences():
         if not entry["Rel Volume"] and rel_vol: entry["Rel Volume"] = rel_vol
         if not entry["ROE"] and roe: entry["ROE"] = roe
         if not entry["Debt/Eq"] and debt_equity: entry["Debt/Eq"] = debt_equity
+        if not entry["Perf Week"] and perf_week: entry["Perf Week"] = perf_week
+        if not entry["Perf Month"] and perf_month: entry["Perf Month"] = perf_month
+        if not entry["Perf Quarter"] and perf_quarter: entry["Perf Quarter"] = perf_quarter
+        if not entry["Avg Volume"] and avg_volume: entry["Avg Volume"] = avg_volume
+        if not entry["ADTV"] and adtv: entry["ADTV"] = adtv
         return entry
 
     for item in oversold:
@@ -744,145 +790,205 @@ def get_confluences():
     except Exception as ex:
         print("Error sorting sectors:", ex)
 
+    # --- P0-3: Flag low-liquidity tickers (ADTV < $5M) so they can be
+    # visually down-ranked or filtered on the frontend. Active traders cannot
+    # realistically build positions in thin micro-caps without huge slippage. ---
+    for ticker, e in tickers_map.items():
+        try:
+            adtv = float(e.get("ADTV") or 0)
+            if adtv <= 0 or adtv < LIQUIDITY_FLOOR:
+                e["Factors"]["low_liquidity"] = True
+        except (ValueError, TypeError):
+            e["Factors"]["low_liquidity"] = True
+
+    # --- P0-1: Compute SPY benchmark returns for Relative Strength dimension.
+    # Extract SPY daily prices from the turbulence cache's chart_series and
+    # compute 5d / 20d / 63d returns. These serve as the benchmark against which
+    # each stock's Perf Week/Month/Quarter is measured. ---
+    spy_perf = {"5d": 0.0, "20d": 0.0, "63d": 0.0}
+    try:
+        turb_cache = cache.get("market_turbulence")
+        if turb_cache and turb_cache.get("chart_series"):
+            cs = turb_cache["chart_series"]
+            spy_prices = [pt.get("spx", 0) for pt in cs if pt.get("spx", 0) > 0]
+            if len(spy_prices) >= 65:
+                spy_perf["5d"] = (spy_prices[-1] / spy_prices[-6] - 1) * 100
+                spy_perf["20d"] = (spy_prices[-1] / spy_prices[-21] - 1) * 100
+                spy_perf["63d"] = (spy_prices[-1] / spy_prices[-64] - 1) * 100
+    except Exception as ex:
+        print("Error computing SPY benchmark:", ex)
+
     res_list = []
     for ticker, e in tickers_map.items():
         reasons = []
         conflicts = []
 
-        # 1. Technical Structure (Max 35)
+        # 1. Technical Structure (Max 30) — P0-1: weights from scoring_config
         tech_dim = 0
         core_patterns = []
         if e["Factors"]["reversal"]:
-            core_patterns.append((20, "reason_reversal"))
+            core_patterns.append((TECH_FACTORS["reversal"], "reason_reversal"))
         if e["Factors"]["pullback"]:
-            core_patterns.append((18, "reason_pullback"))
+            core_patterns.append((TECH_FACTORS["pullback"], "reason_pullback"))
         if e["Factors"]["breakout"]:
-            core_patterns.append((15, "reason_breakout"))
+            core_patterns.append((TECH_FACTORS["breakout"], "reason_breakout"))
         if e["Factors"]["breakout_candidate"]:
-            core_patterns.append((18, "reason_breakout_candidate"))
-            
+            core_patterns.append((TECH_FACTORS["breakout_candidate"], "reason_breakout_candidate"))
+
         if core_patterns:
             core_patterns.sort(key=lambda x: x[0], reverse=True)
             tech_dim += core_patterns[0][0]
             reasons.append(core_patterns[0][1])
-            
-            # Confirmation bonus: +5 for each additional pattern, cap at 10
+
+            # Confirmation bonus for multiple aligned patterns
             if len(core_patterns) > 1:
-                confirm_bonus = min((len(core_patterns) - 1) * 5, 10)
+                confirm_bonus = min((len(core_patterns) - 1) * TECH_FACTORS["confirm_bonus_per"],
+                                     TECH_FACTORS["confirm_bonus_cap"])
                 tech_dim += confirm_bonus
-                # Also append their reasons
                 for val, reason_key in core_patterns[1:]:
                     reasons.append(reason_key)
-                    
+
         if e["Factors"]["volume_spike"]:
-            tech_dim += 5
+            tech_dim += TECH_FACTORS["volume_spike"]
             reasons.append("reason_volume_spike")
 
         if e["Factors"]["high_volatility"]:
-            tech_dim += 2
+            tech_dim += TECH_FACTORS["high_volatility"]
             reasons.append("reason_high_volatility")
 
         if e["Sector"] in top_3_sectors:
             e["Factors"]["strong_sector"] = True
-            tech_dim += 3
+            tech_dim += TECH_FACTORS["strong_sector"]
             reasons.append("reason_strong_sector")
 
         # Signal conflict detection
         if e["Factors"]["overbought"] and (e["Factors"]["reversal"] or e["Factors"]["pullback"]):
-            tech_dim -= 10
+            tech_dim += TECH_FACTORS["conflict_overbought_reversal"]
             conflicts.append("conflict_overbought_reversal")
 
         if e["Factors"]["overbought"] and e["Factors"]["breakout"]:
-            # High-chase risk: breakout + overbought should warn, not reward
             conflicts.append("conflict_overbought_breakout")
 
         if e["Factors"]["reversal"] and e["Factors"]["bearish_momentum"]:
-            tech_dim -= 10
+            tech_dim += TECH_FACTORS["conflict_reversal_bearish"]
             conflicts.append("conflict_reversal_bearish")
 
-        tech_dim = max(min(tech_dim, 35), 0)
+        tech_dim = max(min(tech_dim, DIMENSION_CAPS["tech"]), 0)
 
-        # 2. Fundamentals & Corporate Insiders (Max 35)
+        # 2. Fundamentals & Corporate Insiders (Max 30) — P0-1: weights from config
         fund_dim = 0
         if e["Factors"]["insider_buying"]:
-            fund_dim += 15
+            fund_dim += FUND_FACTORS["insider_buying"]
             reasons.append("reason_insider_buying")
         if e["Factors"]["quality_compounder"]:
-            fund_dim += 15
+            fund_dim += FUND_FACTORS["quality_compounder"]
             reasons.append("reason_quality_compounder")
         if e["Factors"]["analyst_upgrade"]:
-            fund_dim += 10
+            fund_dim += FUND_FACTORS["analyst_upgrade"]
             reasons.append("reason_analyst_upgrade")
         if e["Factors"]["earnings_catalyst"]:
-            fund_dim += 5
+            fund_dim += FUND_FACTORS["earnings_catalyst"]
             reasons.append("reason_earnings_catalyst")
         if e["Factors"]["analyst_downgrade"]:
-            fund_dim -= 10
+            fund_dim += FUND_FACTORS["analyst_downgrade"]
             reasons.append("reason_analyst_downgrade")
-        
+
         # Quality compounder + downgrade conflict
         if e["Factors"]["quality_compounder"] and e["Factors"]["analyst_downgrade"]:
             conflicts.append("conflict_quality_downgrade")
 
-        fund_dim = max(min(fund_dim, 35), 0)
+        fund_dim = max(min(fund_dim, DIMENSION_CAPS["fund"]), 0)
 
-        # 3. Market Sentiment & Flow (Max 20)
+        # 3. Market Sentiment & Flow (Max 15) — P0-1: weights from config
         sent_dim = 0
         if e["Factors"]["momentum_leader"]:
-            sent_dim += 10
+            sent_dim += SENT_FACTORS["momentum_leader"]
             reasons.append("reason_momentum_leader")
         if e["Factors"]["reddit_popular"]:
-            sent_dim += 5
+            sent_dim += SENT_FACTORS["reddit_popular"]
             reasons.append("reason_reddit_popular")
         if e["Factors"]["short_squeeze"]:
             if e["Factors"]["reddit_popular"] or e["Factors"]["reversal"] or e["Factors"]["breakout"] or e["Factors"]["volume_spike"]:
-                sent_dim += 8
+                sent_dim += SENT_FACTORS["short_squeeze_combined"]
                 reasons.append("reason_squeeze_play")
             else:
-                sent_dim += 3
+                sent_dim += SENT_FACTORS["short_squeeze_alone"]
                 reasons.append("reason_high_short_float")
         if e["Factors"]["bearish_momentum"]:
-            sent_dim -= 5
+            sent_dim += SENT_FACTORS["bearish_momentum"]
             reasons.append("reason_bearish_momentum")
 
-        sent_dim = max(min(sent_dim, 20), 0)
+        sent_dim = max(min(sent_dim, DIMENSION_CAPS["sent"]), 0)
 
-        # 4. Valuation (Max 10)
+        # 4. Valuation (Max 5) — P0-1: halved from 10; minimal weight for short-term trading
         val_dim = 0
         try:
             fwd_pe_str = str(e.get("Forward P/E") or "").strip()
             peg_str = str(e.get("PEG") or "").strip()
-            
+
             fwd_pe = float(fwd_pe_str) if fwd_pe_str and fwd_pe_str != "-" else 0.0
             peg = float(peg_str) if peg_str and peg_str != "-" else 0.0
-            
-            # Forward P/E 合理性 (0-5 分)
-            if 0 < fwd_pe <= 15:
-                val_dim += 5   # 明显低估
-                reasons.append("reason_valuation_undervalued")
-            elif 15 < fwd_pe <= 25:
-                val_dim += 3   # 合理估值
-                reasons.append("reason_valuation_fair")
-            elif 25 < fwd_pe <= 40:
-                val_dim += 1   # 偏高但可接受
-                reasons.append("reason_valuation_high_but_acceptable")
-            
-            # PEG 合理性 (0-5 分)
-            if 0 < peg <= 1.0:
-                val_dim += 5   # 成长性价比高
-                reasons.append("reason_peg_undervalued")
-            elif 1.0 < peg <= 2.0:
-                val_dim += 3   # 合理
-                reasons.append("reason_peg_fair")
-            elif 2.0 < peg <= 3.0:
-                val_dim += 1   # 偏贵
-                reasons.append("reason_peg_expensive")
-        except Exception as ex:
-            pass
-        val_dim = max(min(val_dim, 10), 0)
 
-        # Combined Score
-        score = tech_dim + fund_dim + sent_dim + val_dim
+            lo, hi, sc = VALUATION["fwd_pe_undervalued"]
+            if lo < fwd_pe <= hi:
+                val_dim += sc; reasons.append("reason_valuation_undervalued")
+            else:
+                lo, hi, sc = VALUATION["fwd_pe_fair"]
+                if lo < fwd_pe <= hi:
+                    val_dim += sc; reasons.append("reason_valuation_fair")
+                else:
+                    lo, hi, sc = VALUATION["fwd_pe_high_ok"]
+                    if lo < fwd_pe <= hi:
+                        val_dim += sc; reasons.append("reason_valuation_high_but_acceptable")
+
+            lo, hi, sc = VALUATION["peg_undervalued"]
+            if lo < peg <= hi:
+                val_dim += sc; reasons.append("reason_peg_undervalued")
+            else:
+                lo, hi, sc = VALUATION["peg_fair"]
+                if lo < peg <= hi:
+                    val_dim += sc; reasons.append("reason_peg_fair")
+                else:
+                    lo, hi, sc = VALUATION["peg_expensive"]
+                    if lo < peg <= hi:
+                        val_dim += sc; reasons.append("reason_peg_expensive")
+        except Exception:
+            pass
+        val_dim = max(min(val_dim, DIMENSION_CAPS["val"]), 0)
+
+        # 5. Relative Strength vs SPY (Max 20) — P0-1: NEW dimension
+        # Measures excess return over SPY across 5d / 20d / ~60d windows.
+        # A stock outperforming the market is a true leader; one lagging is weak
+        # regardless of its pattern signals. This is the active trader's edge.
+        rs_dim = 0
+        try:
+            stock_5d = normalize_change_pct(e.get("Perf Week"))
+            stock_20d = normalize_change_pct(e.get("Perf Month"))
+            stock_63d = normalize_change_pct(e.get("Perf Quarter"))
+
+            excess_5d = stock_5d - spy_perf["5d"]
+            excess_20d = stock_20d - spy_perf["20d"]
+            excess_63d = stock_63d - spy_perf["63d"]
+
+            positive_count = sum(1 for x in [excess_5d, excess_20d, excess_63d] if x > 0)
+            rising = excess_5d > excess_20d > excess_63d  # momentum accelerating
+
+            if positive_count == 3 and rising:
+                rs_dim = RS_SCORING["all_three_positive_and_rising"]
+                reasons.append("reason_rs_leader")
+            elif positive_count >= 2:
+                rs_dim = RS_SCORING["two_of_three_positive"]
+                reasons.append("reason_rs_strong")
+            elif positive_count >= 1:
+                rs_dim = RS_SCORING["one_of_three_positive"]
+                reasons.append("reason_rs_neutral")
+            # else: rs_dim stays 0 — stock is lagging the market
+        except Exception:
+            pass
+        rs_dim = max(min(rs_dim, DIMENSION_CAPS["rs"]), 0)
+
+        # Combined Score (5 dimensions)
+        score = tech_dim + fund_dim + sent_dim + val_dim + rs_dim
 
         # TechScore: pure technical dimension scoring
         tech_score = 0
@@ -918,23 +1024,41 @@ def get_confluences():
         except:
             pass
             
-        # 3. Price momentum (max 20)
+        # 3. Multi-day price momentum (max 20) — P0-2
+        # OLD logic used only intraday Change, which is noise for swing traders.
+        # NEW logic uses 5-day (Perf Week) + 20-day (Perf Month) returns to gauge
+        # real momentum. For reversal setups a controlled pullback is healthy;
+        # for breakout/pullback setups positive multi-day momentum confirms strength.
         try:
-            change_pct = normalize_change_pct(e["Change"])
+            perf_5d = normalize_change_pct(e.get("Perf Week"))
+            perf_20d = normalize_change_pct(e.get("Perf Month"))
+
+            momentum_score = 0
+            # 5-day momentum (max 12)
             if e["Factors"]["reversal"]:
-                if -5.0 <= change_pct <= -1.0:
-                    tech_score += 20
-                elif -10.0 <= change_pct < -5.0:
-                    tech_score += 15
-                elif change_pct > 0:
-                    tech_score += 10
+                # Reversal: a controlled 1-10% pullback over 5 days is the ideal setup
+                if -10.0 <= perf_5d <= -1.0:
+                    momentum_score += 12
+                elif -20.0 <= perf_5d < -10.0:
+                    momentum_score += 8
+                elif perf_5d > 0:
+                    momentum_score += 4  # already bouncing back
             else:
-                if change_pct > 5.0:
-                    tech_score += 20
-                elif change_pct > 2.0:
-                    tech_score += 15
-                elif change_pct > 0:
-                    tech_score += 10
+                # Breakout/pullback: positive 5-day momentum confirms underlying strength
+                if perf_5d > 5.0:
+                    momentum_score += 12
+                elif perf_5d > 2.0:
+                    momentum_score += 8
+                elif perf_5d > 0:
+                    momentum_score += 4
+
+            # 20-day momentum (max 8) — confirms intermediate-term trend direction
+            if perf_20d > 10.0:
+                momentum_score += 8
+            elif perf_20d > 0:
+                momentum_score += 4
+
+            tech_score += min(momentum_score, 20)
         except:
             pass
             
@@ -952,14 +1076,15 @@ def get_confluences():
             "tech": tech_dim,
             "fund": fund_dim,
             "sent": sent_dim,
-            "val": val_dim
+            "val": val_dim,
+            "rs": rs_dim
         }
         e["Reasons"] = reasons
         e["Conflicts"] = conflicts
 
-        # At least 2 scoring dimensions required for multi-factor confluence
-        dims_with_score = sum([1 for d in [tech_dim, fund_dim, sent_dim, val_dim] if d > 0])
-        if e["Score"] >= 35 and dims_with_score >= 2:
+        # At least MIN_DIMENSIONS scoring dimensions required for multi-factor confluence
+        dims_with_score = sum([1 for d in [tech_dim, fund_dim, sent_dim, val_dim, rs_dim] if d > 0])
+        if e["Score"] >= MIN_SCORE and dims_with_score >= MIN_DIMENSIONS:
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
@@ -1057,24 +1182,28 @@ def get_turbulence():
         cached_data["source"] = "cache"
         return cached_data
     
+    # SAFETY: When cache is empty, return a clearly-marked "no_data" state.
+    # Never return NORMAL/100% — that would mislead traders into thinking the
+    # market is safe and they can go full-size when we simply have no data.
     return {
-        "cache_status": "empty", 
-        "message": "Cache is empty. Please run sync first.", 
+        "cache_status": "no_data",
+        "message": "Risk radar data not yet synced. Tap Refresh to fetch the latest market turbulence snapshot.",
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "status": {
             "date": "",
-            "state": "NORMAL",
-            "state_color": "#2ec4b6",
-            "state_flags": {"normal": True, "elevated": False, "high_risk": False, "critical": False},
-            "position_size_pct": 100,
+            "state": "UNKNOWN",
+            "state_color": "#9ca3af",
+            "state_flags": {"normal": False, "elevated": False, "high_risk": False, "critical": False, "unknown": True},
+            "position_size_pct": None,
             "turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
             "macro_turbulence": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
             "sector_dispersion": {"slow": 0.0, "fast": 0.0, "warning_threshold": 2.0, "extreme_threshold": 4.0, "cov_condition_number": 1.0, "cov_healthy": True},
-            "spx": {"level": 0.0, "sma50": 0.0, "above_sma50": True},
-            "vix": {"level": 0.0, "below_25": True, "dynamic_threshold": 25.0, "rolling_mean": 20.0, "below_dynamic": True},
-            "move": {"level": 0.0, "dynamic_threshold": 80.0, "rolling_mean": 80.0, "below_dynamic": True},
-            "credit": {"level": 1.35, "dynamic_threshold": 1.40, "rolling_mean": 1.35, "below_dynamic": True, "stressed": False},
+            "spx": {"level": 0.0, "sma50": 0.0, "above_sma50": None},
+            "vix": {"level": 0.0, "below_25": None, "dynamic_threshold": 25.0, "rolling_mean": 20.0, "below_dynamic": None},
+            "move": {"level": 0.0, "dynamic_threshold": 80.0, "rolling_mean": 80.0, "below_dynamic": None},
+            "credit": {"level": 1.35, "dynamic_threshold": 1.40, "rolling_mean": 1.35, "below_dynamic": None, "stressed": None},
             "divergence": {"active": False},
+            "probit": {"probability": 0.0, "is_warning": False, "z_value": 0.0},
             "macro_contributors": [],
             "sector_contributors": []
         },

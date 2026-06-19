@@ -57,8 +57,14 @@ export function renderConfluences(list) {
     }
 
     filteredList.forEach(item => {
+        // P0-3: Low-liquidity check (ADTV < $5M) — done early so we can dim the card
+        const isLowLiquidity = item['Factors'] && item['Factors']['low_liquidity'];
+        const adtvVal = parseFloat(item['ADTV']);
+        const adtvText = !isNaN(adtvVal) && adtvVal > 0 ? formatMarketCap(adtvVal) : '-';
+
         const card = document.createElement('div');
         card.className = 'opp-card';
+        if (isLowLiquidity) card.classList.add('card-low-liquidity');
 
         const { formatted: changeText, isBullish } = parseChange(item['Change']);
         const changeClass = isBullish ? 'bullish' : 'bearish';
@@ -94,6 +100,11 @@ export function renderConfluences(list) {
                 volumeSparkHtml = `<span class="vol-spark vol-spark-quiet" title="RVOL: ${rvolVal}">💤 ${state.activeLang === 'zh' ? '缩量' : 'Quiet'}</span>`;
             }
         }
+
+        // P0-3: Low-liquidity warning badge (ADTV < $5M) — thin stocks can't be traded without huge slippage
+        const liquidityBadgeHtml = isLowLiquidity
+            ? `<span class="vol-spark vol-spark-illiquid" title="${state.activeLang === 'zh' ? '日均成交额不足 $5M，流动性差' : 'ADTV < $5M, illiquid'}">⚠️ ${state.activeLang === 'zh' ? '低流动性' : 'Illiquid'}</span>`
+            : '';
 
         let scoreClass = '';
         if (item['Score'] >= 85) {
@@ -140,6 +151,7 @@ export function renderConfluences(list) {
                     <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
                         ${dominantPattern ? `<span class="pattern-badge ${patternClass}">${dominantPattern}</span>` : ''}
                         ${volumeSparkHtml}
+                        ${liquidityBadgeHtml}
                     </div>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: flex-start;">
@@ -172,6 +184,10 @@ export function renderConfluences(list) {
                 <div class="card-footer-item">
                     <span class="item-label">${state.activeLang === 'zh' ? '市值' : 'Market Cap'}</span>
                     <span class="item-value">${formatMarketCap(item['Market Cap'])}</span>
+                </div>
+                <div class="card-footer-item">
+                    <span class="item-label">${state.activeLang === 'zh' ? '日均成交额' : 'ADTV'}</span>
+                    <span class="item-value ${isLowLiquidity ? 'text-warning' : ''}">$${adtvText}</span>
                 </div>
             </div>
 

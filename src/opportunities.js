@@ -58,7 +58,15 @@ export function renderOpportunities(list) {
     sortedList.forEach(item => {
         const card = document.createElement('div');
         card.className = 'opp-card';
-        
+
+        // P0-3: Compute ADTV from raw FinViz fields (Avg Volume × Price) + low-liquidity flag
+        const avgVol = parseFloat(item['Average Volume'] || item['Avg Volume'] || 0);
+        const priceNum = parseFloat(item['Price'] || 0);
+        const adtvVal = (avgVol > 0 && priceNum > 0) ? avgVol * priceNum : 0;
+        const adtvText = adtvVal > 0 ? formatMarketCap(adtvVal) : '-';
+        const isLowLiquidity = adtvVal > 0 && adtvVal < 5_000_000;
+        if (isLowLiquidity) card.classList.add('card-low-liquidity');
+
         const { formatted: changeText, isBullish } = parseChange(item['Change']);
         const changeClass = isBullish ? 'bullish' : 'bearish';
 
@@ -84,8 +92,8 @@ export function renderOpportunities(list) {
                     <span class="item-value">${escapeHtml(item['Price']) || '-'}</span>
                 </div>
                 <div class="card-footer-item">
-                    <span class="item-label">${state.activeLang === 'zh' ? '市盈率' : 'P/E'}</span>
-                    <span class="item-value">${escapeHtml(item['P/E']) || '-'}</span>
+                    <span class="item-label">${state.activeLang === 'zh' ? '日均成交额' : 'ADTV'}</span>
+                    <span class="item-value ${isLowLiquidity ? 'text-warning' : ''}">$${adtvText}</span>
                 </div>
             </div>
         `;

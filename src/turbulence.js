@@ -27,12 +27,43 @@ export async function loadTurbulence() {
 }
 
 export function renderTurbulence(payload) {
-    if (!payload || payload.cache_status === 'empty') {
+    const lang = state.activeLang;
+    const t = translations[lang];
+
+    // Handle no-data / empty cache: show a clear "not synced" state on every card
+    // instead of leaving stale loading placeholders or a misleading green NORMAL.
+    if (!payload || payload.cache_status === 'no_data' || payload.cache_status === 'empty') {
+        const warnMsg = lang === 'zh'
+            ? '风险雷达数据尚未同步。请点击右上角 Refresh 拉取最新快照。'
+            : 'Risk radar data not yet synced. Tap Refresh (top-right) to fetch the latest snapshot.';
+
+        // Regime card → UNKNOWN (gray), not NORMAL (green)
+        const stateText = document.getElementById('turb-state-text');
+        const stateDot = document.getElementById('turb-state-dot');
+        const stateDesc = document.getElementById('turb-state-desc');
+        if (stateText) { stateText.textContent = lang === 'zh' ? '数据未同步' : 'NO DATA'; stateText.style.color = '#9ca3af'; }
+        if (stateDot) { stateDot.className = 'turb-state-dot'; stateDot.style.backgroundColor = '#9ca3af'; }
+        if (stateDesc) stateDesc.innerHTML = `<span style="color:#9ca3af">${warnMsg}</span>`;
+
+        // Position card → "--"
+        const posVal = document.getElementById('turb-pos-val');
+        const posBar = document.getElementById('turb-pos-bar');
+        if (posVal) posVal.textContent = '--';
+        if (posBar) { posBar.style.width = '0%'; posBar.style.backgroundColor = '#9ca3af'; }
+
+        // Probit card → "--"
+        const probitVal = document.getElementById('turb-probit-val');
+        const probitBar = document.getElementById('turb-probit-bar');
+        const probitStatus = document.getElementById('turb-probit-status');
+        if (probitVal) probitVal.textContent = '--';
+        if (probitBar) { probitBar.style.width = '0%'; probitBar.style.backgroundColor = '#9ca3af'; }
+        if (probitStatus) { probitStatus.textContent = lang === 'zh' ? '数据未同步' : 'NO DATA'; probitStatus.style.color = '#9ca3af'; }
+
         const verdictText = document.getElementById('turb-verdict-text');
-        if (verdictText) verdictText.textContent = translations[state.activeLang].confluence_cache_empty || 'Cache empty. Please run sync.';
+        if (verdictText) verdictText.textContent = warnMsg;
         return;
     }
-    
+
     const status = payload.status;
     const latestMacro = status.macro_turbulence;
     const latestSector = status.sector_dispersion;

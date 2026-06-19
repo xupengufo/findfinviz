@@ -1546,6 +1546,9 @@ html[data-theme=dark] .segmented button.active {
 .val-fill {
     background: linear-gradient(90deg, #7c3aed, #a78bfa);
 }
+.rs-fill {
+    background: linear-gradient(90deg, #dc2626, #f87171);
+}
 
 /* Sector Modal Drill-Down Layout */
 .sector-modal-card {
@@ -1741,6 +1744,23 @@ html[data-theme=dark] .segmented button.active {
     background: rgba(107, 114, 128, 0.1);
     color: #9ca3af;
     border-color: rgba(107, 114, 128, 0.2);
+}
+
+/* P0-3: Low-liquidity warning badge + dimmed card */
+.vol-spark-illiquid {
+    background: rgba(234, 179, 8, 0.12);
+    color: #ca8a04;
+    border-color: rgba(234, 179, 8, 0.25);
+}
+.card-low-liquidity {
+    opacity: 0.62;
+    border-style: dashed;
+}
+.card-low-liquidity:hover {
+    opacity: 0.85;
+}
+.text-warning {
+    color: #ca8a04;
 }
 
 /* Tech Score Indicators (Color-coded) - Light Mode Defaults */

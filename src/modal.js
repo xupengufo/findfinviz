@@ -79,21 +79,29 @@ export async function openModal(ticker) {
             const fundScore = confluenceItem.ScoreBreakdown.fund || 0;
             const sentScore = confluenceItem.ScoreBreakdown.sent || 0;
             const valScore = confluenceItem.ScoreBreakdown.val || 0;
+            const rsScore = confluenceItem.ScoreBreakdown.rs || 0;
 
-            document.getElementById('breakdown-tech-val').innerText = `${techScore} / 35`;
-            document.getElementById('breakdown-tech-bar').style.width = `${(techScore / 35) * 100}%`;
+            document.getElementById('breakdown-tech-val').innerText = `${techScore} / 30`;
+            document.getElementById('breakdown-tech-bar').style.width = `${(techScore / 30) * 100}%`;
 
-            document.getElementById('breakdown-fund-val').innerText = `${fundScore} / 35`;
-            document.getElementById('breakdown-fund-bar').style.width = `${(fundScore / 35) * 100}%`;
+            document.getElementById('breakdown-fund-val').innerText = `${fundScore} / 30`;
+            document.getElementById('breakdown-fund-bar').style.width = `${(fundScore / 30) * 100}%`;
 
-            document.getElementById('breakdown-sent-val').innerText = `${sentScore} / 20`;
-            document.getElementById('breakdown-sent-bar').style.width = `${(sentScore / 20) * 100}%`;
+            document.getElementById('breakdown-sent-val').innerText = `${sentScore} / 15`;
+            document.getElementById('breakdown-sent-bar').style.width = `${(sentScore / 15) * 100}%`;
 
             const breakdownValText = document.getElementById('breakdown-val-val');
             const breakdownValBar = document.getElementById('breakdown-val-bar');
             if (breakdownValText && breakdownValBar) {
-                breakdownValText.innerText = `${valScore} / 10`;
-                breakdownValBar.style.width = `${(valScore / 10) * 100}%`;
+                breakdownValText.innerText = `${valScore} / 5`;
+                breakdownValBar.style.width = `${(valScore / 5) * 100}%`;
+            }
+
+            const breakdownRsText = document.getElementById('breakdown-rs-val');
+            const breakdownRsBar = document.getElementById('breakdown-rs-bar');
+            if (breakdownRsText && breakdownRsBar) {
+                breakdownRsText.innerText = `${rsScore} / 20`;
+                breakdownRsBar.style.width = `${(rsScore / 20) * 100}%`;
             }
         } else {
             breakdownPanel.style.display = 'none';

@@ -115,26 +115,62 @@ SUPPORTED_SIGNALS = {
 }
 
 CUSTOM_FILTERS = {
-    "high_short_interest": {"Float Short": "Over 15%"},
+    # Squeeze setup: high short interest + volume spark to ignite
+    "high_short_interest": {
+        "Float Short": "Over 15%",
+        "Relative Volume": "Over 1.5"
+    },
+    # Pullback in an uptrend: above 50/200 SMA (trend up) but pulled back
+    # below 20-day SMA with RSI cooling (<50). A real pullback, not just "not overbought".
     "pullback": {
         "50-Day Simple Moving Average": "Price above SMA50",
         "200-Day Simple Moving Average": "Price above SMA200",
+        "20-Day Simple Moving Average": "Price below SMA20",
         "RSI (14)": "Not Overbought (<50)"
     },
+    # Breakout candidate: near 52w high + strong volume (>=2x) + uptrend confirmed
     "breakout_candidate": {
         "52-Week High/Low": "0-5% below High",
-        "Relative Volume": "Over 1.5"
+        "Relative Volume": "Over 2",
+        "50-Day Simple Moving Average": "Price above SMA50"
     },
+    # Quality compounder: strong fundamentals AND in a long-term uptrend
+    # (good company ≠ good timing; require price above 200-day SMA)
     "quality_compounder": {
         "Return on Equity": "Over +20%",
         "Debt/Equity": "Under 0.5",
         "EPS growth this year": "Over 10%",
         "Gross Margin": "Positive (>0%)",
-        "P/E": "Profitable (>0)"
+        "P/E": "Profitable (>0)",
+        "200-Day Simple Moving Average": "Price above SMA200"
     }
 }
 
-SCREENER_COLUMNS = [0, 1, 2, 3, 4, 6, 7, 8, 9, 13, 30, 33, 38, 64, 65, 66, 67]
+# FinViz screener column indices (see finvizfinance/constants.py CUSTOM_SCREENER_COLUMNS).
+# Kept explicit + commented so future changes don't require decoding magic numbers.
+SCREENER_COLUMNS = [
+    0,   # No.
+    1,   # Ticker
+    2,   # Company
+    3,   # Sector
+    4,   # Industry
+    6,   # Market Cap.
+    7,   # P/E
+    8,   # Forward P/E
+    9,   # PEG
+    13,  # P/Free Cash Flow
+    30,  # Float Short
+    33,  # Return on Equity
+    38,  # Total Debt/Equity
+    42,  # Performance (Week)  ≈ 5-day return  — used for TechScore momentum + RS
+    43,  # Performance (Month) ≈ 20-day return — used for TechScore momentum + RS
+    44,  # Performance (Quarter) ≈ 60-day return — used for RS
+    63,  # Average Volume       — used for ADTV (liquidity) filtering
+    64,  # Relative Volume
+    65,  # Price
+    66,  # Change
+    67,  # Volume
+]
 
 def apply_signal_filter(fcustom, sig_key, sig_val):
     if sig_key in CUSTOM_FILTERS:
@@ -301,16 +337,17 @@ def get_ew_cov_and_mean(history, halflife=63):
     
     return weighted_mean, cov_matrix
 
-def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False, probit_warning=False):
-    """Map normalized distance x to a target position size using a smooth sigmoid."""
-    if danger_zone_active or any_complacency or credit_stressed or probit_warning:
+def calculate_sigmoid_position(x, any_complacency, credit_stressed=False, probit_warning=False):
+    """Map normalized distance x to a target position size using a smooth sigmoid.
+    P0-4: removed danger_zone_active — risk state is now purely Probit-driven."""
+    if any_complacency or credit_stressed or probit_warning:
         min_pos = 25.0
     else:
         min_pos = 50.0
-        
+
     x_clipped = np.clip(x, -2.0, 5.0)
     sigmoid_val = 1.0 / (1.0 + np.exp(-4.0 * (x_clipped - 0.5)))
-    
+
     pos = min_pos + (100.0 - min_pos) * (1.0 - sigmoid_val)
     return pos
 
@@ -509,20 +546,17 @@ def calculate_market_turbulence():
 
 def process_turbulence_output(df_result):
     # Pre-calculate raw and smoothed position sizes for all dates
+    # P0-4: Danger Zone composite removed; position sizing uses macro turbulence
+    # distance + complacency + credit stress + Probit cap.
     raw_positions = []
     for _, row in df_result.iterrows():
-        t_warn = row['macro_slow'] > row['macro_warn']
-        s_disp_warn = row['sector_slow'] > row['sector_warn']
-        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
-        
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         m_comp = row['move_level'] < row['move_dynamic_threshold']
         c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
         any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
-        
-        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
+
         c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
-        
+
         h_warn = row['macro_warn']
         h_extreme = row['macro_extreme']
         h_macro_slow = row['macro_slow']
@@ -530,47 +564,46 @@ def process_turbulence_output(df_result):
             hx = (h_macro_slow - h_warn) / (h_extreme - h_warn)
         else:
             hx = 0.0
-            
+
         probit_warn = bool(row['probit_warning'])
-        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed, probit_warn)
+        raw_pos = calculate_sigmoid_position(hx, any_comp, c_stressed, probit_warn)
         if probit_warn:
             # Dynamic cap on position size based on crash probability
             probit_cap = 100.0 * (1.0 - float(row['probit_prob']))
             raw_pos = min(raw_pos, probit_cap)
-            
+
         raw_positions.append(raw_pos)
-        
+
     df_result['position_raw'] = raw_positions
     df_result['position_smoothed'] = df_result['position_raw'].ewm(span=5, adjust=False).mean()
-    
+
     latest = df_result.iloc[-1]
-    
+
     macro_above_warn = bool(latest['macro_slow'] > latest['macro_warn'])
     sector_above_warn = bool(latest['sector_slow'] > latest['sector_warn'])
     spx_above_sma50 = bool(latest['spx_level'] > latest['spx_sma50'] * 1.01)
-    
+
     vix_complacent = bool(latest['vix_level'] < latest['vix_dynamic_threshold'])
     move_complacent = bool(latest['move_level'] < latest['move_dynamic_threshold'])
     credit_complacent = bool(latest['credit_ratio'] < latest['credit_dynamic_threshold'])
-    
+
     any_complacency = bool(sum([vix_complacent, move_complacent, credit_complacent]) >= 2)
-    danger_zone_active = bool((macro_above_warn or sector_above_warn) and spx_above_sma50 and any_complacency)
-    
+
     credit_stressed = bool(latest['credit_ratio'] > (latest['credit_rolling_mean'] + 1.5 * latest['credit_rolling_std']))
-    
+
+    # P0-4: State is now purely Probit-driven (with macro-extreme backstop for CRITICAL).
+    # The old Danger Zone composite (33% hit rate) is retired.
+    probit_prob = float(latest['probit_prob'])
     state = "NORMAL"
     if latest['macro_slow'] > latest['macro_extreme']:
         state = "CRITICAL"
-    elif danger_zone_active:
+    elif probit_prob > 0.50:
         state = "HIGH RISK"
-    elif bool(latest['probit_warning']):
-        if float(latest['probit_prob']) > 0.50:
-            state = "HIGH RISK"
-        else:
-            state = "ELEVATED RISK"
+    elif probit_prob > 0.30:
+        state = "ELEVATED RISK"
     elif macro_above_warn or sector_above_warn or credit_stressed:
         state = "ELEVATED RISK"
-        
+
     state_flags = {
         "normal": state == "NORMAL",
         "elevated": state == "ELEVATED RISK",
@@ -589,18 +622,8 @@ def process_turbulence_output(df_result):
     
     chart_series = []
     for _, row in df_result.iterrows():
-        t_warn = row['macro_slow'] > row['macro_warn']
-        s_disp_warn = row['sector_slow'] > row['sector_warn']
-        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
-        
-        v_comp = row['vix_level'] < row['vix_dynamic_threshold']
-        m_comp = row['move_level'] < row['move_dynamic_threshold']
-        c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
-        any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
-        
-        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
         c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
-        
+
         chart_series.append({
             "date": row['date'],
             "turb_slow": round(float(row['macro_slow']), 2),
@@ -624,57 +647,51 @@ def process_turbulence_output(df_result):
             "move_dynamic_threshold": round(float(row['move_dynamic_threshold']), 2),
             "credit_ratio": round(float(row['credit_ratio']), 3),
             "credit_dynamic_threshold": round(float(row['credit_dynamic_threshold']), 3),
-            "danger_zone": dz,
+            "danger_zone": bool(row['probit_warning']),  # P0-4: renamed semantically, kept key for frontend compat
             "credit_stressed": c_stressed,
             "position_size_pct": int(round(row['position_smoothed'])),
             "probit_prob": round(float(row['probit_prob']), 4),
             "probit_warning": bool(row['probit_warning'])
         })
-        
-    dz_periods = []
+
+    # P0-4: Record Probit warning periods (probit_prob > 0.30) instead of old Danger Zone
+    probit_periods = []
     in_period = False
     start_date = None
-    peak_turb = 0.0
-    
+    peak_prob = 0.0
+
     for idx, row in df_result.iterrows():
-        t_warn = row['macro_slow'] > row['macro_warn']
-        s_disp_warn = row['sector_slow'] > row['sector_warn']
-        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
-        v_comp = row['vix_level'] < row['vix_dynamic_threshold']
-        m_comp = row['move_level'] < row['move_dynamic_threshold']
-        c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
-        any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
-        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
-        
-        if dz:
+        is_warning = bool(row['probit_warning'])
+
+        if is_warning:
             if not in_period:
                 in_period = True
                 start_date = row['date']
-                peak_turb = float(row['macro_slow'])
+                peak_prob = float(row['probit_prob'])
             else:
-                peak_turb = max(peak_turb, float(row['macro_slow']))
+                peak_prob = max(peak_prob, float(row['probit_prob']))
         else:
             if in_period:
                 end_date = df_result.iloc[idx-1]['date']
-                dz_periods.append({
+                probit_periods.append({
                     "start_date": start_date,
                     "end_date": end_date,
-                    "peak_turb": round(peak_turb, 2),
+                    "peak_prob": round(peak_prob, 4),
                     "duration_days": int((pd.to_datetime(end_date) - pd.to_datetime(start_date)).days) + 1
                 })
                 in_period = False
-                
+
     if in_period:
         end_date = df_result.iloc[-1]['date']
-        dz_periods.append({
+        probit_periods.append({
             "start_date": start_date,
             "end_date": "Present",
-            "peak_turb": round(peak_turb, 2),
+            "peak_prob": round(peak_prob, 4),
             "duration_days": int((pd.to_datetime(end_date) - pd.to_datetime(start_date)).days) + 1
         })
-        
-    dz_periods.reverse()
-    danger_zone_history = dz_periods[:10]
+
+    probit_periods.reverse()
+    danger_zone_history = probit_periods[:10]  # keep key name for frontend compat
     
     # Format Contributors
     macro_contribs_list = []
@@ -757,7 +774,7 @@ def process_turbulence_output(df_result):
                 "stressed": credit_stressed
             },
             "divergence": {
-                "active": danger_zone_active
+                "active": bool(latest['probit_warning'])  # P0-4: Probit-driven
             },
             "probit": {
                 "probability": round(float(latest['probit_prob']), 4),

@@ -21,13 +21,14 @@ def get_ew_cov_and_mean(history, halflife=63):
     cov_matrix = (centered.T * weights) @ centered / divisor
     return weighted_mean, cov_matrix
 
-def calculate_sigmoid_position(x, danger_zone_active, any_complacency, credit_stressed=False, probit_warning=False):
-    """Map normalized distance x to a target position size using a smooth sigmoid."""
-    if danger_zone_active or any_complacency or credit_stressed or probit_warning:
+def calculate_sigmoid_position(x, any_complacency, credit_stressed=False, probit_warning=False):
+    """Map normalized distance x to a target position size using a smooth sigmoid.
+    P0-4: removed danger_zone_active — risk state is now purely Probit-driven."""
+    if any_complacency or credit_stressed or probit_warning:
         min_pos = 25.0
     else:
         min_pos = 50.0
-        
+
     x_clipped = np.clip(x, -2.0, 5.0)
     sigmoid_val = 1.0 / (1.0 + np.exp(-4.0 * (x_clipped - 0.5)))
     pos = min_pos + (100.0 - min_pos) * (1.0 - sigmoid_val)
@@ -190,28 +191,20 @@ def run_backtest():
     df_result['probit_prob'] = 1.0 / (1.0 + np.exp(-df_result['probit_z']))
     df_result['probit_warning'] = df_result['probit_prob'] > 0.30
     
-    # Precompute Danger Zone & Complacency & Position sizing
-    danger_zone_list = []
+    # Precompute Complacency & Position sizing (P0-4: Danger Zone removed, Probit-driven)
     any_complacency_list = []
     raw_positions = []
-    
+
     for idx, row in df_result.iterrows():
-        t_warn = row['macro_slow'] > row['macro_warn']
-        s_disp_warn = row['sector_slow'] > row['sector_warn']
-        s_above = row['spx_level'] > row['spx_sma50'] * 1.01
-        
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         m_comp = row['move_level'] < row['move_dynamic_threshold']
         c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
         any_comp = bool(sum([v_comp, m_comp, c_comp]) >= 2)
         any_complacency_list.append(any_comp)
-        
-        dz = bool((t_warn or s_disp_warn) and s_above and any_comp)
-        danger_zone_list.append(dz)
-        
+
         c_stressed = bool(row['credit_ratio'] > (row['credit_rolling_mean'] + 1.5 * row['credit_rolling_std']))
         probit_warn = bool(row['probit_warning'])
-        
+
         h_warn = row['macro_warn']
         h_extreme = row['macro_extreme']
         h_macro_slow = row['macro_slow']
@@ -219,15 +212,14 @@ def run_backtest():
             hx = (h_macro_slow - h_warn) / (h_extreme - h_warn)
         else:
             hx = 0.0
-            
-        raw_pos = calculate_sigmoid_position(hx, dz, any_comp, c_stressed, probit_warn)
+
+        raw_pos = calculate_sigmoid_position(hx, any_comp, c_stressed, probit_warn)
         if probit_warn:
             probit_cap = 100.0 * (1.0 - float(row['probit_prob']))
             raw_pos = min(raw_pos, probit_cap)
-            
+
         raw_positions.append(raw_pos)
-        
-    df_result['danger_zone'] = danger_zone_list
+
     df_result['any_complacency'] = any_complacency_list
     df_result['position_raw'] = raw_positions
     df_result['position_smoothed'] = df_result['position_raw'].ewm(span=5, adjust=False).mean()
@@ -275,33 +267,33 @@ def run_backtest():
     for k in spy_metrics.keys():
         print(f"  {k:25s} | {spy_metrics[k]:20s} | {strat_metrics[k]:20s}")
         
-    # Danger Zone Signal Analysis
-    # Let's find Danger Zone entry points (transition False -> True)
-    df_result['dz_entry'] = (df_result['danger_zone'] == True) & (df_result['danger_zone'].shift(1) == False)
-    dz_dates = df_result[df_result['dz_entry']].index
-    
-    print(f"\nDanger Zone Analysis (Total triggers: {len(dz_dates)}):")
-    dz_analysis_rows = []
-    
-    for dzd in dz_dates:
-        # get performance over next 5, 10, 20 trading days
-        idx_pos = df_result.index.get_loc(dzd)
+    # Probit Warning Signal Analysis (P0-4: replaced Danger Zone event study)
+    # Find Probit warning entry points (transition False -> True, i.e. prob crosses 0.30)
+    df_result['probit_entry'] = (df_result['probit_warning'] == True) & (df_result['probit_warning'].shift(1) == False)
+    probit_dates = df_result[df_result['probit_entry']].index
+
+    print(f"\nProbit Warning Analysis (Total triggers: {len(probit_dates)}):")
+    probit_analysis_rows = []
+
+    for pd_date in probit_dates:
+        idx_pos = df_result.index.get_loc(pd_date)
         dates_after = df_result.index[idx_pos : min(idx_pos + 21, len(df_result))]
         if len(dates_after) < 5:
             continue
-            
-        spy_start_price = df_result.loc[dzd, 'spx_level']
-        
+
+        spy_start_price = df_result.loc[pd_date, 'spx_level']
+        prob_at_trigger = df_result.loc[pd_date, 'probit_prob']
+
         ret_5 = (df_result.loc[dates_after[min(5, len(dates_after)-1)], 'spx_level'] / spy_start_price) - 1.0
         ret_10 = (df_result.loc[dates_after[min(10, len(dates_after)-1)], 'spx_level'] / spy_start_price) - 1.0
         ret_20 = (df_result.loc[dates_after[min(20, len(dates_after)-1)], 'spx_level'] / spy_start_price) - 1.0
-        
-        # Max drawdown in subsequent 20 days
+
         prices_after = df_result.loc[dates_after, 'spx_level']
         max_dd_after = ((prices_after - spy_start_price) / spy_start_price).min()
-        
-        dz_analysis_rows.append({
-            "Date": dzd.strftime('%Y-%m-%d'),
+
+        probit_analysis_rows.append({
+            "Date": pd_date.strftime('%Y-%m-%d'),
+            "Probit P": f"{prob_at_trigger:.2f}",
             "SPY Return 5d": f"{ret_5*100:.2f}%",
             "SPY Return 10d": f"{ret_10*100:.2f}%",
             "SPY Return 20d": f"{ret_20*100:.2f}%",
@@ -311,20 +303,19 @@ def run_backtest():
             "ret_20_raw": ret_20,
             "max_dd_raw": max_dd_after
         })
-        
-    df_dz_anal = pd.DataFrame(dz_analysis_rows)
-    if not df_dz_anal.empty:
-        print(df_dz_anal[["Date", "SPY Return 5d", "SPY Return 10d", "SPY Return 20d", "Max Drawdown 20d"]].to_string(index=False))
-        
-        # Summary statistics
-        avg_ret_5 = df_dz_anal['ret_5_raw'].mean() * 100
-        avg_ret_10 = df_dz_anal['ret_10_raw'].mean() * 100
-        avg_ret_20 = df_dz_anal['ret_20_raw'].mean() * 100
-        avg_max_dd = df_dz_anal['max_dd_raw'].mean() * 100
-        pct_neg_20 = (df_dz_anal['ret_20_raw'] < 0).mean() * 100
-        
+
+    df_pb_anal = pd.DataFrame(probit_analysis_rows)
+    if not df_pb_anal.empty:
+        print(df_pb_anal[["Date", "Probit P", "SPY Return 5d", "SPY Return 10d", "SPY Return 20d", "Max Drawdown 20d"]].to_string(index=False))
+
+        avg_ret_5 = df_pb_anal['ret_5_raw'].mean() * 100
+        avg_ret_10 = df_pb_anal['ret_10_raw'].mean() * 100
+        avg_ret_20 = df_pb_anal['ret_20_raw'].mean() * 100
+        avg_max_dd = df_pb_anal['max_dd_raw'].mean() * 100
+        pct_neg_20 = (df_pb_anal['ret_20_raw'] < 0).mean() * 100
+
         stats_md = f"""
-### Danger Zone Post-Trigger Statistics
+### Probit Warning Post-Trigger Statistics
 - **Average SPY Return (5 days)**: {avg_ret_5:.2f}%
 - **Average SPY Return (10 days)**: {avg_ret_10:.2f}%
 - **Average SPY Return (20 days)**: {avg_ret_20:.2f}%
@@ -333,7 +324,7 @@ def run_backtest():
 """
         print(stats_md)
     else:
-        stats_md = "\nNo Danger Zone events triggered in backtest history.\n"
+        stats_md = "\nNo Probit warning events triggered in backtest history.\n"
         print(stats_md)
         
     # Write to Markdown Report
@@ -353,15 +344,15 @@ Lookback Window: 10 Years (Historical daily returns)
 > [!NOTE]
 > The Risk Radar Managed strategy scales its exposure to SPY based on the dynamically calculated risk signal. Cash holdings are assumed to yield 0% interest.
 
-## 2. Danger Zone Event Study
-Total Danger Zone warning events triggered: **{len(dz_dates)}**
+## 2. Probit Warning Event Study
+Total Probit warning events triggered: **{len(probit_dates)}**
 
-{df_dz_anal[["Date", "SPY Return 5d", "SPY Return 10d", "SPY Return 20d", "Max Drawdown 20d"]].to_markdown(index=False) if not df_dz_anal.empty else "No events triggered."}
+{df_pb_anal[["Date", "Probit P", "SPY Return 5d", "SPY Return 10d", "SPY Return 20d", "Max Drawdown 20d"]].to_markdown(index=False) if not df_pb_anal.empty else "No events triggered."}
 
 {stats_md}
 
 ## 3. Backtest Conclusion
-The model successfully reduces max drawdown and stabilizes the portfolio's Sharpe ratio. In extreme market events, the Sigmoid function maps risk to aggressive cash allocation, protecting capital, while the EWM position filter mitigates short-term trading costs.
+P0-4 update: the risk state is now driven purely by the Probit crash-probability model (VIX + yield curve + credit spread), replacing the old 6-signal Danger Zone composite whose 20-day negative-return hit rate was only 33%. The Sigmoid position-sizing still uses macro turbulence distance + complacency + credit stress as inputs, with a Probit-probability cap on max exposure.
 """
     
     # Save locally in project directory
