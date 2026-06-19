@@ -145,77 +145,86 @@ export function renderTurbulence(payload) {
         }
     }
     
-    // 3. Update Checklist (6 items)
-    const macroIcon = document.getElementById('check-icon-macro');
-    const macroVal = document.getElementById('check-val-macro');
-    const sectorIcon = document.getElementById('check-icon-sector');
-    const sectorVal = document.getElementById('check-val-sector');
-    const spxIcon = document.getElementById('check-icon-spx');
-    const spxVal = document.getElementById('check-val-spx');
-    const vixIcon = document.getElementById('check-icon-vix');
-    const vixVal = document.getElementById('check-val-vix');
-    const moveIcon = document.getElementById('check-icon-move');
-    const moveVal = document.getElementById('check-val-move');
-    const creditIcon = document.getElementById('check-icon-credit');
-    const creditVal = document.getElementById('check-val-credit');
-    
-    const macroMet = latestMacro.slow > latestMacro.warning_threshold;
-    const sectorMet = latestSector.slow > latestSector.warning_threshold;
-    const spxMet = latestSpx.above_sma50;
-    const vixMet = latestVix.below_dynamic;
-    const moveMet = latestMove.below_dynamic;
-    const creditMet = latestCredit.below_dynamic;
-    
-    if (macroVal) macroVal.textContent = `${latestMacro.slow.toFixed(2)} (vs ${latestMacro.warning_threshold.toFixed(2)})`;
-    if (macroIcon) {
-        macroIcon.outerHTML = macroMet 
-            ? `<i id="check-icon-macro" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
-            : `<i id="check-icon-macro" class="check-icon unmet" data-lucide="circle"></i>`;
-    }
-    
-    if (sectorVal) sectorVal.textContent = `${latestSector.slow.toFixed(2)} (vs ${latestSector.warning_threshold.toFixed(2)})`;
-    if (sectorIcon) {
-        sectorIcon.outerHTML = sectorMet 
-            ? `<i id="check-icon-sector" class="check-icon warn-met" data-lucide="alert-triangle"></i>`
-            : `<i id="check-icon-sector" class="check-icon unmet" data-lucide="circle"></i>`;
-    }
-    
-    if (spxVal) spxVal.textContent = `${latestSpx.level.toFixed(1)} (vs SMA50 ${latestSpx.sma50.toFixed(1)})`;
-    if (spxIcon) {
-        spxIcon.outerHTML = spxMet 
-            ? `<i id="check-icon-spx" class="check-icon met" data-lucide="check-circle-2"></i>`
-            : `<i id="check-icon-spx" class="check-icon unmet" data-lucide="circle"></i>`;
-    }
-    
-    if (vixVal) vixVal.textContent = `${latestVix.level.toFixed(1)} (vs ${latestVix.dynamic_threshold.toFixed(1)})`;
-    if (vixIcon) {
-        vixIcon.outerHTML = vixMet 
-            ? `<i id="check-icon-vix" class="check-icon met" data-lucide="check-circle-2"></i>`
-            : `<i id="check-icon-vix" class="check-icon unmet" data-lucide="circle"></i>`;
-    }
-    
-    if (moveVal) moveVal.textContent = `${latestMove.level.toFixed(1)} (vs ${latestMove.dynamic_threshold.toFixed(1)})`;
-    if (moveIcon) {
-        moveIcon.outerHTML = moveMet 
-            ? `<i id="check-icon-move" class="check-icon met" data-lucide="check-circle-2"></i>`
-            : `<i id="check-icon-move" class="check-icon unmet" data-lucide="circle"></i>`;
-    }
-    
-    if (creditVal) {
-        let label = `${latestCredit.level.toFixed(3)} (vs ${latestCredit.dynamic_threshold.toFixed(3)})`;
-        if (latestCredit.stressed) {
-            label += state.activeLang === 'zh' ? ' (信用压力大!)' : ' (STRESSED!)';
-        }
-        creditVal.textContent = label;
-    }
-    if (creditIcon) {
-        if (latestCredit.stressed) {
-            creditIcon.outerHTML = `<i id="check-icon-credit" class="check-icon warn-met" data-lucide="alert-triangle"></i>`;
-        } else {
-            creditIcon.outerHTML = creditMet 
-                ? `<i id="check-icon-credit" class="check-icon met" data-lucide="check-circle-2"></i>`
-                : `<i id="check-icon-credit" class="check-icon unmet" data-lucide="circle"></i>`;
-        }
+    // 3. Probit Factor Decomposition (P0-4: replaced 6-signal Danger Zone Checklist)
+    // Shows the three factors driving the Probit crash probability:
+    // VIX, Yield Curve (10Y-2Y), Credit Spread — each as standardized Z-value
+    // with its weighted contribution to the Probit linear combination.
+    const probitFactorsEl = document.getElementById('probit-factors-list');
+    if (probitFactorsEl && status.probit) {
+        const p = status.probit;
+        const lang = state.activeLang;
+
+        // Probit model weights (from local_sync.py / backtest_radar.py)
+        const W_VIX = 0.586576;
+        const W_YC  = 0.314905;
+        const W_CS  = -0.196963;
+        const INTERCEPT = -2.714673;
+
+        // Each factor: raw value, standardized Z, weighted contribution to probit_z
+        const factors = [
+            {
+                name: lang === 'zh' ? 'VIX 波动率指数' : 'VIX (Equity Volatility)',
+                raw: p.vix_raw != null ? p.vix_raw.toFixed(2) : '-',
+                z: p.x_vix != null ? p.x_vix : 0,
+                weight: W_VIX,
+                contribution: (p.x_vix != null ? p.x_vix : 0) * W_VIX,
+                hint: lang === 'zh' ? '股市恐慌情绪' : 'Stock market fear gauge'
+            },
+            {
+                name: lang === 'zh' ? '收益率曲线 (10Y-2Y)' : 'Yield Curve (10Y-2Y)',
+                raw: p.yc_raw != null ? p.yc_raw.toFixed(3) + '%' : '-',
+                z: p.x_yc != null ? p.x_yc : 0,
+                weight: W_YC,
+                contribution: (p.x_yc != null ? p.x_yc : 0) * W_YC,
+                hint: lang === 'zh' ? '衰退预警: 曲线倒挂' : 'Recession warning: inverted curve'
+            },
+            {
+                name: lang === 'zh' ? '信用利差' : 'Credit Spread',
+                raw: p.cs_raw != null ? p.cs_raw.toFixed(3) : '-',
+                z: p.x_cs != null ? p.x_cs : 0,
+                weight: W_CS,
+                contribution: (p.x_cs != null ? p.x_cs : 0) * W_CS,
+                hint: lang === 'zh' ? '债市违约风险压力' : 'Bond market default stress'
+            }
+        ];
+
+        // Max abs contribution for bar scaling
+        const maxAbsContrib = Math.max(0.5, ...factors.map(f => Math.abs(f.contribution)));
+
+        probitFactorsEl.innerHTML = factors.map(f => {
+            const contribPct = (f.contribution / maxAbsContrib) * 50; // bar width % (max 50% of half-width)
+            const isPositive = f.contribution >= 0;
+            const barColor = isPositive ? '#e71d36' : '#2ec4b6'; // red = risk-increasing, green = risk-reducing
+            const zLabel = f.z >= 0 ? `+${f.z.toFixed(2)}σ` : `${f.z.toFixed(2)}σ`;
+            const contribLabel = f.contribution >= 0 ? `+${f.contribution.toFixed(3)}` : `${f.contribution.toFixed(3)}`;
+
+            return `
+                <div class="probit-factor-item" style="padding: 10px 0; border-bottom: 1px dashed var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">${f.name}</span>
+                            <span style="font-size: 0.65rem; color: var(--text-muted); margin-left: 6px;">${f.hint}</span>
+                        </div>
+                        <div style="font-family: var(--font-mono); font-size: 0.72rem;">
+                            <span style="color: var(--text-secondary);">raw: ${f.raw}</span>
+                            <span style="color: ${barColor}; margin-left: 8px; font-weight: 600;">${zLabel}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="flex: 1; height: 8px; background: var(--surface-muted); border-radius: 4px; position: relative; overflow: hidden;">
+                            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border);"></div>
+                            <div style="position: absolute; top: 0; bottom: 0; ${isPositive ? 'left: 50%' : 'right: 50%'}; width: ${Math.min(50, Math.abs(contribPct))}%; background: ${barColor}; border-radius: 4px; transition: width 0.6s ease-out;"></div>
+                        </div>
+                        <span style="font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; color: ${barColor}; min-width: 55px; text-align: right;">${contribLabel}</span>
+                    </div>
+                </div>
+            `;
+        }).join('') + `
+            <div style="padding: 10px 0 0 0; display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.75rem;">
+                <span style="color: var(--text-muted);">z = ${W_VIX}·VIX + ${W_YC}·YC ${W_CS}·CS ${INTERCEPT}</span>
+                <span style="font-weight: 700; color: var(--text-primary);">z = ${p.z_value != null ? p.z_value.toFixed(3) : '-'}</span>
+            </div>
+        `;
     }
     
     // Verdict Banner
