@@ -9,6 +9,7 @@
 import warnings
 import pandas as pd
 from time import sleep
+import random
 from finvizfinance.quote import finvizfinance
 from finvizfinance.util import (
     web_scrap,
@@ -210,7 +211,7 @@ class Base:
         for i in range(1, page):
             if limit <= 0:
                 break
-            sleep(sleep_sec)
+            sleep(sleep_sec + random.uniform(0.2, 1.0))
             if verbose == 1:
                 progress_bar(i, page)
             self.request_params["r"] = i * self.size + 1

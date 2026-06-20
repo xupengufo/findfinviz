@@ -8,31 +8,7 @@ from datetime import datetime, timezone
 MACRO_TICKERS = ["SPY", "IWM", "EFA", "EEM", "TLT", "IEF", "HYG", "UUP", "GLD", "DBC"]
 SECTOR_TICKERS = ["XLK", "XLF", "XLY", "XLP", "XLE", "XLV", "XLI", "XLB", "XLU", "XLRE", "XLC"]
 
-def get_ew_cov_and_mean(history, halflife=63):
-    """Calculate exponentially weighted mean and covariance matrix."""
-    N, k = history.shape
-    weights = 2.0 ** (-np.arange(N - 1, -1, -1) / halflife)
-    weights /= weights.sum()
-    weighted_mean = np.sum(history.values * weights[:, np.newaxis], axis=0)
-    centered = history.values - weighted_mean
-    divisor = 1.0 - np.sum(weights ** 2)
-    if divisor <= 0:
-        divisor = 1.0
-    cov_matrix = (centered.T * weights) @ centered / divisor
-    return weighted_mean, cov_matrix
-
-def calculate_sigmoid_position(x, any_complacency, credit_stressed=False, probit_warning=False):
-    """Map normalized distance x to a target position size using a smooth sigmoid.
-    P0-4: removed danger_zone_active — risk state is now purely Probit-driven."""
-    if any_complacency or credit_stressed or probit_warning:
-        min_pos = 25.0
-    else:
-        min_pos = 50.0
-
-    x_clipped = np.clip(x, -2.0, 5.0)
-    sigmoid_val = 1.0 / (1.0 + np.exp(-4.0 * (x_clipped - 0.5)))
-    pos = min_pos + (100.0 - min_pos) * (1.0 - sigmoid_val)
-    return pos
+from quant_models import get_ew_cov_and_mean, calculate_sigmoid_position
 
 def run_backtest():
     print("=== RISK RADAR BACKTEST FRAMEWORK ===")

@@ -1,14 +1,14 @@
 # Risk Radar Model Backtest Report
-Created: 2026-06-19 22:34:20
+Created: 2026-06-20 11:08:19
 Lookback Window: 10 Years (Historical daily returns)
 
 ## 1. Performance Overview
 | Metric | Buy & Hold SPY | Risk Radar Managed |
 |---|---|---|
-| **Total Return** | 250.01% | 248.52% |
-| **Annualized Return** | 14.97% | 14.92% |
+| **Total Return** | 253.65% | 252.09% |
+| **Annualized Return** | 15.10% | 15.05% |
 | **Annualized Volatility** | 18.68% | 15.53% |
-| **Sharpe Ratio** | 0.801 | 0.961 |
+| **Sharpe Ratio** | 0.808 | 0.969 |
 | **Max Drawdown** | -33.72% | -24.67% |
 
 > [!NOTE]

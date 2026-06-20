@@ -10,11 +10,29 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, date
+import random
+import time
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 OPR/108.0.0.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+]
 
 headers = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    "User-Agent": random.choice(USER_AGENTS),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive"
 }
+
+def rotate_user_agent():
+    headers["User-Agent"] = random.choice(USER_AGENTS)
+
 session = requests.Session()
 
 proxy_dict = None
@@ -40,6 +58,9 @@ def web_scrap(url, params=None):
     Returns:
         soup(beautiful soup): website html
     """
+    rotate_user_agent()
+    # Add a tiny random jitter sleep between requests to avoid pattern detection
+    time.sleep(random.uniform(0.1, 0.5))
     try:
         website = session.get(
             url, params=params, headers=headers, timeout=timeout_value, proxies=proxy_dict
@@ -61,6 +82,8 @@ def image_scrap(url, ticker, out_dir):
         ticker(str): output image name
         out_dir(str): output directory
     """
+    rotate_user_agent()
+    time.sleep(random.uniform(0.1, 0.3))
     try:
         r = session.get(url, stream=True, headers=headers, timeout=timeout_value, proxies= proxy_dict)
         r.raise_for_status()
