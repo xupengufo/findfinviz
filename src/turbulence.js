@@ -59,6 +59,55 @@ export function renderTurbulence(payload) {
         if (probitBar) { probitBar.style.width = '0%'; probitBar.style.backgroundColor = '#9ca3af'; }
         if (probitStatus) { probitStatus.textContent = lang === 'zh' ? '数据未同步' : 'NO DATA'; probitStatus.style.color = '#9ca3af'; }
 
+        // Macro Liquidity card → "--"
+        const liqVal = document.getElementById('macro-liq-val');
+        const walclVal = document.getElementById('macro-walcl-val');
+        const tgaVal = document.getElementById('macro-tga-val');
+        const rrpVal = document.getElementById('macro-rrp-val');
+        const liqBadge = document.getElementById('macro-liq-z-badge');
+        if (liqVal) liqVal.textContent = '--';
+        if (walclVal) walclVal.textContent = '--';
+        if (tgaVal) tgaVal.textContent = '--';
+        if (rrpVal) rrpVal.textContent = '--';
+        if (liqBadge) {
+            liqBadge.textContent = 'Z-Score: --';
+            liqBadge.style.backgroundColor = 'rgba(156, 163, 175, 0.15)';
+            liqBadge.style.color = '#9ca3af';
+            liqBadge.style.borderColor = 'rgba(156, 163, 175, 0.35)';
+        }
+
+        // Funding card → "--"
+        const sofrIorbVal = document.getElementById('macro-sofr-iorb-val');
+        const sofrVal = document.getElementById('macro-sofr-val');
+        const iorbVal = document.getElementById('macro-iorb-val');
+        const steepeningVal = document.getElementById('macro-steepening-val');
+        const curveBadge = document.getElementById('macro-curve-badge');
+        if (sofrIorbVal) sofrIorbVal.textContent = '--';
+        if (sofrVal) sofrVal.textContent = '--';
+        if (iorbVal) iorbVal.textContent = '--';
+        if (steepeningVal) steepeningVal.textContent = '--';
+        if (curveBadge) {
+            curveBadge.textContent = 'NO DATA';
+            curveBadge.style.backgroundColor = 'rgba(156, 163, 175, 0.15)';
+            curveBadge.style.color = '#9ca3af';
+            curveBadge.style.borderColor = 'rgba(156, 163, 175, 0.35)';
+        }
+
+        // Labor card → "--"
+        const laborVal = document.getElementById('macro-labor-val');
+        const iursaVal = document.getElementById('macro-iursa-val');
+        const icsaVal = document.getElementById('macro-icsa-val');
+        const laborBadge = document.getElementById('macro-labor-badge');
+        if (laborVal) laborVal.textContent = '--';
+        if (iursaVal) iursaVal.textContent = '--';
+        if (icsaVal) icsaVal.textContent = '--';
+        if (laborBadge) {
+            laborBadge.textContent = 'NO DATA';
+            laborBadge.style.backgroundColor = 'rgba(156, 163, 175, 0.15)';
+            laborBadge.style.color = '#9ca3af';
+            laborBadge.style.borderColor = 'rgba(156, 163, 175, 0.35)';
+        }
+
         const verdictText = document.getElementById('turb-verdict-text');
         if (verdictText) verdictText.textContent = warnMsg;
         return;
@@ -226,7 +275,126 @@ export function renderTurbulence(payload) {
             </div>
         `;
     }
-    
+
+    // 2.7 Update Multi-dimensional Macro Indicators Cards (Net Liquidity, Funding, Labor SOS)
+    const macroPlumbing = status.macro_plumbing || {};
+    const labor = status.labor || {};
+
+    // 2.7.1 Net Liquidity Card
+    const liqVal = document.getElementById('macro-liq-val');
+    const walclVal = document.getElementById('macro-walcl-val');
+    const tgaVal = document.getElementById('macro-tga-val');
+    const rrpVal = document.getElementById('macro-rrp-val');
+    const liqBadge = document.getElementById('macro-liq-z-badge');
+
+    if (macroPlumbing.net_liq != null) {
+        if (liqVal) liqVal.textContent = `$${macroPlumbing.net_liq.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}B`;
+        if (walclVal) walclVal.textContent = `$${(macroPlumbing.walcl / 1000).toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}B`;
+        if (tgaVal) tgaVal.textContent = `$${(macroPlumbing.tga / 1000).toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}B`;
+        if (rrpVal) rrpVal.textContent = `$${macroPlumbing.rrp.toFixed(1)}B`;
+        
+        if (liqBadge) {
+            const z = macroPlumbing.net_liq_z_score;
+            if (z >= 0) {
+                liqBadge.textContent = `Z-Score: +${z.toFixed(2)} (${state.activeLang === 'zh' ? '充沛' : 'AMPLE'})`;
+                liqBadge.style.backgroundColor = 'rgba(46, 196, 182, 0.15)';
+                liqBadge.style.color = '#2ec4b6';
+                liqBadge.style.borderColor = 'rgba(46, 196, 182, 0.35)';
+            } else {
+                liqBadge.textContent = `Z-Score: ${z.toFixed(2)} (${state.activeLang === 'zh' ? '收缩' : 'DRAINED'})`;
+                liqBadge.style.backgroundColor = 'rgba(231, 29, 54, 0.15)';
+                liqBadge.style.color = '#e71d36';
+                liqBadge.style.borderColor = 'rgba(231, 29, 54, 0.35)';
+            }
+        }
+    }
+
+    // 2.7.2 Funding & Curve Card
+    const sofrIorbVal = document.getElementById('macro-sofr-iorb-val');
+    const sofrVal = document.getElementById('macro-sofr-val');
+    const iorbVal = document.getElementById('macro-iorb-val');
+    const steepeningVal = document.getElementById('macro-steepening-val');
+    const curveBadge = document.getElementById('macro-curve-badge');
+
+    if (macroPlumbing.sofr_iorb_spread != null) {
+        const spreadBps = macroPlumbing.sofr_iorb_spread * 100;
+        if (sofrIorbVal) {
+            const sign = spreadBps >= 0 ? '+' : '';
+            sofrIorbVal.textContent = `${sign}${spreadBps.toFixed(1)}`;
+            sofrIorbVal.style.color = spreadBps > 0 ? '#e71d36' : 'var(--text-primary)';
+        }
+        if (sofrVal) sofrVal.textContent = `${macroPlumbing.sofr.toFixed(2)}%`;
+        if (iorbVal) iorbVal.textContent = `${macroPlumbing.iorb.toFixed(2)}%`;
+        
+        let stText = 'NORMAL';
+        let stLabel = state.activeLang === 'zh' ? '正常' : 'NORMAL';
+        if (macroPlumbing.steepening_type === 'BULL_STEEPENER') {
+            stText = 'BULL_STEEPENER';
+            stLabel = state.activeLang === 'zh' ? '牛陡 (衰退风险)' : 'BULL STEEP (RECESSION)';
+        } else if (macroPlumbing.steepening_type === 'BEAR_STEEPENER') {
+            stText = 'BEAR_STEEPENER';
+            stLabel = state.activeLang === 'zh' ? '熊陡 (期限溢价)' : 'BEAR STEEP (INFLATION)';
+        }
+        
+        if (steepeningVal) {
+            steepeningVal.textContent = stLabel;
+            if (stText === 'BULL_STEEPENER') {
+                steepeningVal.style.color = '#e71d36';
+            } else if (stText === 'BEAR_STEEPENER') {
+                steepeningVal.style.color = '#d98a2b';
+            } else {
+                steepeningVal.style.color = 'var(--text-secondary)';
+            }
+        }
+        
+        if (curveBadge) {
+            const isStressed = spreadBps > 0 || stText === 'BULL_STEEPENER';
+            if (isStressed) {
+                curveBadge.textContent = stText === 'BULL_STEEPENER' ? 'BULL STEEP' : 'FUNDING PRESSURE';
+                curveBadge.style.backgroundColor = 'rgba(231, 29, 54, 0.15)';
+                curveBadge.style.color = '#e71d36';
+                curveBadge.style.borderColor = 'rgba(231, 29, 54, 0.35)';
+            } else {
+                curveBadge.textContent = 'STABLE';
+                curveBadge.style.backgroundColor = 'rgba(46, 196, 182, 0.15)';
+                curveBadge.style.color = '#2ec4b6';
+                curveBadge.style.borderColor = 'rgba(46, 196, 182, 0.35)';
+            }
+        }
+    }
+
+    // 2.7.3 Labor SOS Card
+    const laborVal = document.getElementById('macro-labor-val');
+    const iursaVal = document.getElementById('macro-iursa-val');
+    const icsaVal = document.getElementById('macro-icsa-val');
+    const laborBadge = document.getElementById('macro-labor-badge');
+
+    if (labor.sos_indicator != null) {
+        if (laborVal) laborVal.textContent = `${labor.sos_indicator.toFixed(3)}%`;
+        if (iursaVal) iursaVal.textContent = `${labor.iursa.toFixed(2)}%`;
+        if (icsaVal) icsaVal.textContent = labor.icsa.toLocaleString();
+        
+        if (laborBadge) {
+            const sos = labor.sos_indicator;
+            if (sos >= 0.20) {
+                laborBadge.textContent = state.activeLang === 'zh' ? '就业危机 (CRITICAL)' : 'CRITICAL SOS';
+                laborBadge.style.backgroundColor = 'rgba(231, 29, 54, 0.15)';
+                laborBadge.style.color = '#e71d36';
+                laborBadge.style.borderColor = 'rgba(231, 29, 54, 0.35)';
+            } else if (sos >= 0.15) {
+                laborBadge.textContent = state.activeLang === 'zh' ? '弱势预警 (WARNING)' : 'WARNING SOS';
+                laborBadge.style.backgroundColor = 'rgba(217, 138, 43, 0.15)';
+                laborBadge.style.color = '#d98a2b';
+                laborBadge.style.borderColor = 'rgba(217, 138, 43, 0.35)';
+            } else {
+                laborBadge.textContent = state.activeLang === 'zh' ? '充分就业 (STABLE)' : 'STABLE';
+                laborBadge.style.backgroundColor = 'rgba(46, 196, 182, 0.15)';
+                laborBadge.style.color = '#2ec4b6';
+                laborBadge.style.borderColor = 'rgba(46, 196, 182, 0.35)';
+            }
+        }
+    }
+
     // Verdict Banner
     const verdictBanner = document.getElementById('turb-verdict-banner');
     const verdictText = document.getElementById('turb-verdict-text');
@@ -362,104 +530,104 @@ export function renderTurbulence(payload) {
         
         if (stateName === 'NORMAL') {
             analysisContent = state.activeLang === 'zh' 
-                ? '<strong>当前状态：常态化（NORMAL）</strong>。大类资产之间的收益率协方差结构保持稳定，传统资产分散化配置模型（如 60/40 股债平衡、风险平价）在此阶段高度有效。标普500（SPY）指数价格呈现健康的上升通道趋势，且 VIX 指数处于正常或较低的历史分位数。未检测到系统性资产重组或共振下跌迹象。'
-                : '<strong>Current Regime: NORMAL</strong>. Covariance structures across major asset classes are stable. Traditional diversification models (e.g. 60/40 balance, risk-parity) are highly effective in this phase. The S&P 500 (SPY) tracks a healthy upward trend, and VIX is in a normal or low historical range. No signs of systemic correlation fracture detected.';
+                ? '<strong>当前状态：常态机制（NORMAL）</strong>。系统各项多维核心宏观指标表现健康。美联储净流动性充足（Z-Score为正），银行体系超额准备金无缺口；SOFR-IORB利差在零以下波动，银行与非银机构短期拆借成本稳定，期限溢价合理；劳动力市场SOS恶化警报未激活，失业率维持良性循环。各大类资产的协方差保持稳定，传统的分散化资产配置（如 60/40 股债平衡、风险平价）极具保护效力。标普500呈健康的趋势走势。'
+                : '<strong>Current Regime: NORMAL</strong>. All multi-dimensional macro leading indicators are healthy. Fed net liquidity is ample (positive Z-Score) with no reserve scarcity; SOFR-IORB spread floats below zero, signifying stable short-term funding costs and rational term premium; Labor SOS warning is inactive with initial claims in check. Covariance structures are stable. Traditional diversification (60/40, risk-parity) is highly effective.';
             
             allocHtml = state.activeLang === 'zh'
-                ? `<li>权益敞口：<strong>100% (满仓)</strong></li>
-                   <li>现金留存：<strong>0%</strong></li>
-                   <li>战术动作：维持标准战略资产配置，无需保留额外防御性现金。</li>`
-                : `<li>Equities Exposure: <strong>100%</strong></li>
-                   <li>Cash/Risk-Free Allocation: <strong>0%</strong></li>
-                   <li>Action: Maintain full risk asset exposure; follow standard Strategic Asset Allocation (SAA).</li>`;
+                ? `<li>仓位控制：<strong>100% 满仓（正常配置）</strong></li>
+                   <li>无风险现金：<strong>0% - 10% 战术多头缓冲</strong></li>
+                   <li>战术动作：流动性环境宽松，维持既定的战略配置，精选具有技术面、基本面和机构共识的科技与高Beta个股。</li>`
+                : `<li>Equities Exposure: <strong>100% (Full Exposure)</strong></li>
+                   <li>Cash/Risk-Free Buffer: <strong>0% - 10%</strong></li>
+                   <li>Action: Liquid environment is supportive. Follow Strategic Asset Allocation (SAA), targeting high-beta, technology and growth sectors.</li>`;
                    
             rotHtml = state.activeLang === 'zh'
-                ? `<li>行业偏向：均衡配置或适度偏向成长板块（科技 XLK、非必需消费 XLY）</li>
-                   <li>回避行业：无特定回避行业。</li>`
-                : `<li>Sector Tilt: Standard growth-defensive balance or active growth (XLK, XLY)</li>
-                   <li>Avoid: No specific exclusions; market broad breadth is healthy.</li>`;
+                ? `<li>配置行业：偏向高增长与强 Beta 行业（如科技 XLK、非必需消费 XLY 等）</li>
+                   <li>规避行业：无特定板块需要强制规避，市场广度表现健康。</li>`
+                : `<li>Sector Tilt: Shift toward high-growth and high-beta (XLK, XLY, XLF)</li>
+                   <li>Avoid: No explicit sector exclusions; market breadth is robust.</li>`;
                    
             hedgeHtml = state.activeLang === 'zh'
-                ? `<li>期权对冲比例：<strong>0% (无对冲)</strong></li>
-                   <li>对冲建议：当前无需期权对冲。尽管 VIX 便宜，但在低湍流环境下持有对冲会有正的保费时间损耗。</li>`
-                : `<li>Hedging Ratio: <strong>0% (None)</strong></li>
-                   <li>Action: No options hedges needed. While VIX is low, buying protective options under low systemic stress will lead to unnecessary theta decay.</li>`;
+                ? `<li>对冲配比：<strong>0% (无须对冲)</strong></li>
+                   <li>对冲建议：尽管 VIX 保费目前非常便宜，但系统性流动性极佳，购买看跌期权通常会因时间价值衰减（Theta decay）造成正损耗。</li>`
+                : `<li>Hedging Ratio: <strong>0% (No Hedges)</strong></li>
+                   <li>Action: Under strong liquidity plumbing, protective options will suffer unnecessary theta decay. No options hedge required.</li>`;
                    
         } else if (stateName === 'ELEVATED RISK') {
             analysisContent = state.activeLang === 'zh'
-                ? '<strong>当前状态：风险抬升（ELEVATED RISK）</strong>。跨资产湍流指数（慢速线）或行业离散度指数已突破 95% 历史警戒线，表明资产间收益相关性偏离正常模式，底层系统性压力正在加速积聚。目前快速湍流线亦高企，表明市场正在承受强烈的资产重叠共振冲击，资产分散化的保护效应正在迅速下降。'
-                : '<strong>Current Regime: ELEVATED RISK</strong>. The Slow Turbulence Index or Sector Dispersion has crossed the 95th percentile warning line, indicating that asset return correlations are deviating from historical norms. A sharp rise in the Fast Turbulence Index confirms an immediate cross-asset correlation shock, leading to a quick decay in diversification protection.';
+                ? '<strong>当前状态：预警激活（ELEVATED RISK）</strong>。跨资产马氏距离阻尼慢速线突破 95% 警戒线，或者<strong>美联储净流动性降至负区间（Net Liquidity Z-Score &lt; 0）</strong>，或<strong>SOFR-IORB利差突破 0 基点警戒线</strong>。这些信号均表明银行及影子银行体系超额流动性正在收缩，或是资金面开始出现局部的结构性融资惩罚溢价。虽然股指短期仍有惯性，但防御性调仓程序应立即启动。'
+                : '<strong>Current Regime: ELEVATED RISK</strong>. The Slow Macro Turbulence has breached the 95th percentile, or **Fed Net Liquidity has entered the negative Z-score zone**, or the **SOFR-IORB spread has flipped positive**. These signal a drains-down of system-wide bank reserves or funding penalty pressures in the money markets. Defensive pruning protocols must be activated immediately.';
             
             allocHtml = state.activeLang === 'zh'
-                ? `<li>权益敞口：<strong>75%</strong></li>
-                   <li>现金留存：<strong>25% (防守防御)</strong></li>
-                   <li>战术动作：适度收回部分多头敞口，提防潜在的高位震荡或回撤。</li>`
-                : `<li>Equities Exposure: <strong>75%</strong></li>
-                   <li>Cash/Risk-Free Allocation: <strong>25%</strong></li>
-                   <li>Action: Raise cash buffers; scale down slightly to protect capital.</li>`;
+                ? `<li>仓位控制：<strong>上限 50%（主动降仓）</strong></li>
+                   <li>无风险现金：<strong>50% 以上（短期债/现金）</strong></li>
+                   <li>战术动作：强制撤出至少一半的多头头寸。当美联储净流动性紧缩与非银拆借溢价上升并存时，坚决兑现利润以规避成长股杀估值。</li>`
+                : `<li>Equities Exposure: <strong>Max 50% (Active De-risking)</strong></li>
+                   <li>Cash/Bills Reserve: <strong>50% or above</strong></li>
+                   <li>Action: Force-scale down equity exposure to 50% max. If negative net liquidity and positive SOFR-IORB spread co-exist, lock in profits defensively.</li>`;
                    
             rotHtml = state.activeLang === 'zh'
-                ? `<li>行业偏向：偏向低 Beta 防御性板块（必需消费 XLP、公用事业 XLU、医疗保健 XLV）</li>
-                   <li>回避行业：缩减投机性高估值成长股，以及高杠杆小盘股。</li>`
-                : `<li>Sector Tilt: Low-beta defensives (XLP, XLU, XLV)</li>
-                   <li>Avoid: Speculative high-valuation growth names, highly leveraged micro/small caps.</li>`;
+                ? `<li>配置行业：防御性低 Beta 板块（必需消费 XLP、医疗保健 XLV、黄金 GLD）</li>
+                   <li>规避行业：缩减高杠杆、投机性强、依赖流动性扩张估值的中小市值成长股。</li>`
+                : `<li>Sector Tilt: Defensive low-beta (XLP, XLV, gold GLD)</li>
+                   <li>Avoid: Speculative growth, high debt small caps highly vulnerable to funding dry-ups.</li>`;
                    
             hedgeHtml = state.activeLang === 'zh'
-                ? `<li>期权对冲比例：<strong>10% 名义价值对冲</strong></li>
-                   <li>对冲建议：密切监视隐含波动率，可以考虑在当前较低保费水平下，布局少量远期虚值 (OTM -5%) 的标普看跌期权。</li>`
+                ? `<li>对冲配比：<strong>10% 名义价值对冲</strong></li>
+                   <li>对冲建议：考虑到隐含波动率（VIX）可能尚未反应此处的流动性降温，应以较低的隐含波动率保费成本，购入远期虚值（OTM -5%）看跌期权做尾部保护。</li>`
                 : `<li>Hedging Ratio: <strong>10% Notional Value</strong></li>
-                   <li>Action: Monitor options market. VIX level is low. Consider purchasing cheap OTM (-5% strike) protective puts to hedge tail risk.</li>`;
+                   <li>Action: Volatility might be underpricing the liquidity drain. Acquire cheap OTM (-5% strike) protective puts under low VIX regimes.</li>`;
                    
         } else if (stateName === 'HIGH RISK') {
             analysisContent = state.activeLang === 'zh'
-                ? '<strong>当前状态：高风险（HIGH RISK - Danger Zone 预警激活）</strong>。系统已触发模型置信度最高的 <strong>Danger Zone 警告</strong>！市场呈现典型的“牛市末自满”特征——SPY 仍运行于50日均线上方（买盘假象），VIX/MOVE 仍低于滚动动态阈值（市场自满、缺乏保费买盘），然而大类资产湍流指数已突破历史警戒线，底层结构严重分裂。这往往是暴风雨来临前的典型状态。'
-                : '<strong>Current Regime: HIGH RISK (Danger Zone Active)</strong>. The system has triggered a high-confidence **Danger Zone alert**! The market is showcasing a classic "complacent bull extension" signature: SPY is above its 50-day SMA (buying momentum) and VIX/MOVE is below the dynamic threshold (market complacency), yet cross-asset turbulence has breached the warning level. This is a typical pre-drawdown signature.';
+                ? '<strong>当前状态：高风险（HIGH RISK - 崩盘预警）</strong>。系统已触发置信度极高的 <strong>Danger Zone 警告（SPY在50日均线上方但流动性底层已发生相关性分裂）</strong>，或<strong>国债收益率曲线发生“牛陡（Bull Steepening）”衰退重估</strong>，或<strong>劳动力 SOS 指标突破 0.15 警示界线</strong>。此阶段市场往往伴随着极度的“盲目乐观”与高自满，股市价格在高位横盘震荡，但随时可能因一次微小的流动性扰动引发急速的多头踩踏。'
+                : '<strong>Current Regime: HIGH RISK (Crash Danger Zone Active)</strong>. The system has triggered a high-confidence **Danger Zone Warning** (SPY above 50d SMA but cross-asset correlations fracturing), or the yield curve exhibits a **Bull Steepener recession re-rating**, or **Labor SOS has breached 0.15**. The market displays high complacency, but is highly vulnerable to correlation-breakdowns.';
             
             allocHtml = state.activeLang === 'zh'
-                ? `<li>权益敞口：<strong>50%</strong></li>
-                   <li>现金留存：<strong>50% (强制对半)</strong></li>
-                   <li>战术动作：强制收回流动性，半仓过冬，大幅提升防御性。</li>`
-                : `<li>Equities Exposure: <strong>50%</strong></li>
-                   <li>Cash/Risk-Free Allocation: <strong>50%</strong></li>
-                   <li>Action: Enforce cash conservation; scale down equities to 50%.</li>`;
+                ? `<li>仓位控制：<strong>上限 25%（极度防御）</strong></li>
+                   <li>无风险现金：<strong>75% 以上（高流动性资产）</strong></li>
+                   <li>战术动作：强制降仓至 25% 以下。严格遵守单一标的持仓不超过 2% 净资产的硬性限制。保留大量干火药（Dry powder）。</li>`
+                : `<li>Equities Exposure: <strong>Max 25% (Extreme Capital Preservation)</strong></li>
+                   <li>Cash/Money Market: <strong>75% or above</strong></li>
+                   <li>Action: Rigidly cap equity portfolio size at 25%. Limit single-stock positions to under 2% to protect against unexpected tail drops.</li>`;
                    
             rotHtml = state.activeLang === 'zh'
-                ? `<li>行业偏向：全面调入防御行业（必需消费 XLP、公用事业 XLU）</li>
-                   <li>回避行业：周期性消费股 (XLY)、金融股 (XLF) 及高杠杆行业。</li>`
-                : `<li>Sector Tilt: Allocate to low-beta defensives (XLP, XLU)</li>
-                   <li>Avoid: Consumer Discretionary (XLY), Financials (XLF), high leverage.</li>`;
+                ? `<li>配置行业：现金类资产为主，权益端仅配置必需消费（XLP）与公用事业（XLU）</li>
+                   <li>规避行业：规避所有周期性行业（XLY、XLF、XLE）以及估值泡沫高企的硬科技。</li>`
+                : `<li>Sector Tilt: Move to cash, limited allocation to core utilities (XLU) & staples (XLP)</li>
+                   <li>Avoid: Highly cyclical sectors (XLY, XLF, XLE) and high-multiple high growth.</li>`;
                   
             const putStrike = Math.round(latestSpx.level * 0.97);
             hedgeHtml = state.activeLang === 'zh'
-                ? `<li>期权对冲比例：<strong>30% 名义价值对冲</strong></li>
-                   <li>对冲建议：买入 <strong>30-45 天到期、行权价为 $${putStrike} (SPY/SPX -3% ATM)</strong> 的 SPY Protective Put。当前 VIX ($${latestVix.level.toFixed(1)}) 极低，对冲极其便宜。</li>`
-                : `<li>Hedging Ratio: <strong>30% Notional Value</strong></li>
-                   <li>Action: Buy <strong>30-45 DTE SPY Protective Put</strong> at strike **$${putStrike}** (SPY -3% ATM). Equity options are cheap as VIX is low ($${latestVix.level.toFixed(1)}).</li>`;
+                ? `<li>对冲配比：<strong>30% 名义价值对冲</strong></li>
+                   <li>对冲建议：若隐含波动率 VIX ($${latestVix.level.toFixed(1)}) 仍受压，必须直接买入 30-45天到期、行权价在当前标普价格 -3% 处的平值（ATM）看跌期权做高保护对冲。</li>`
+                : `<li>Hedging Ratio: <strong>30% Notional Value (Heavy Hedging)</strong></li>
+                   <li>Action: Buy 30-45 DTE SPY protective puts at -3% strike. Hedges are highly underpriced.</li>`;
                    
         } else if (stateName === 'CRITICAL') {
             analysisContent = state.activeLang === 'zh'
-                ? '<strong>当前状态：极端风险（CRITICAL - 崩溃警告）</strong>。慢速宏观系统湍流已突破 99% 的极端历史上限。大类资产的协方差出现破坏性坍塌，相关性在短期内极速趋近于 1（所有资产同向暴跌风险极大）。不管 VIX 指数是否已经暴起，此状态下金融系统流动性处于极度脆弱边缘，极易发生无差别抛售踩踏。'
-                : '<strong>Current Regime: CRITICAL (Crash Warning)</strong>. The Slow Macro Turbulence has breached the 99th percentile extreme historical limit. Covariance structures have collapsed, and correlations are rapidly converging to 1. Regardless of VIX panic level, market liquidity is extremely fragile, and an indiscriminate liquidity sell-off is highly probable.';
+                ? '<strong>当前状态：极端风险（CRITICAL - 绝对退守）</strong>。跨资产马氏距离慢速线击穿 99% 的绝对历史上限，或是<strong>劳动力市场 SOS 指标突破 0.20 深度衰退值（失业人数相较于低点边际剧烈爬升）</strong>。金融系统面临灾难性的无差别清算清盘风险，所有大类资产的协方差破裂并趋于同向下跌。无论大盘是否暴跌、无论VIX是否飙升，实体经济正遭受硬着陆洗礼。'
+                : '<strong>Current Regime: CRITICAL (Systemic Capitulation)</strong>. Slow Macro Turbulence has breached the 99th percentile limit, or **Labor SOS has crossed the 0.20 threshold**, signifying rapid job decay and recession. Cross-asset covariance is fractured, leading to high-correlation crash risk. Physical recession or liquidity freeze is highly probable.';
             
             allocHtml = state.activeLang === 'zh'
-                ? `<li>权益敞口：<strong>25% (最低限度)</strong></li>
-                   <li>现金留存：<strong>75%</strong></li>
-                   <li>战术动作：只保留底仓，全面退守无风险资产（短期国债/现金）。</li>`
-                : `<li>Equities Exposure: <strong>25% (Minimum)</strong></li>
-                   <li>Cash/Ultra-Short Bills: <strong>75%</strong></li>
-                   <li>Action: Reduce exposure to minimum; park capital in short-term bills.</li>`;
+                ? `<li>仓位控制：<strong>0%（绝对空仓，强制清零）</strong></li>
+                   <li>无风险现金：<strong>100% 停泊（隔夜现金/超短期美债）</strong></li>
+                   <li>战术动作：完全撤出多头，强制清零所有风险权益。<strong>禁止任何形式的抄底、补仓、马丁加仓或网格交易</strong>。</li>`
+                : `<li>Equities Exposure: <strong>0% (Absolute Cash / Liquidation)</strong></li>
+                   <li>Cash/Bills Allocation: <strong>100% (Safety Haven)</strong></li>
+                   <li>Action: Clean sweep risk assets. Enforce cash-only stance. **Strictly forbid catching falling knives, averaging down, or grid trading.**</li>`;
                   
             rotHtml = state.activeLang === 'zh'
-                ? `<li>行业动作：忽略任何板块轮动，传统“防御板块”可能会与成长股同跌。</li>
-                   <li>战术动作：维持高流动性现金，避免承接任何下落的飞刀。</li>`
-                : `<li>Sector Tilt: Ignore sector rotations; defensives will fall with growth in liquidity squeeze.</li>
-                   <li>Action: Stay in cash; strictly avoid catching falling knives.</li>`;
+                ? `<li>行业动作：忽略任何行业板块轮动。在硬着陆流动性踩踏中，防守板块与成长股将同遭抛售。</li>
+                   <li>战术动作：仅持有超短期美国国债或超流动性的货币市场基金，保持高度的变现自由度。</li>`
+                : `<li>Sector Tilt: Disregard sector rotation. In a liquidity run-off, staples will sell off with tech.</li>
+                   <li>Action: Rest strictly in ultra-short-term government T-Bills or cash equivalents.</li>`;
                   
             hedgeHtml = state.activeLang === 'zh'
-                ? `<li>对冲措施：<strong>多头大幅平仓为主，辅以尾部风险对冲</strong></li>
-                   <li>对冲建议：直接通过股票平仓锁定流动性，此时期权保费（VIX $${latestVix.level.toFixed(1)}）过高，买入 Put 已极不划算。</li>`
-                : `<li>Hedging Ratio: <strong>Equities Pruning over Options</strong></li>
-                   <li>Action: Lock in liquidity by selling shares; buying puts now is expensive due to high volatility (VIX $${latestVix.level.toFixed(1)}).</li>`;
+                ? `<li>对冲措施：<strong>以平仓兑现现金代替期权对冲</strong></li>
+                   <li>对冲建议：由于流动性崩坏此时隐含波动率（VIX $${latestVix.level.toFixed(1)}）极高，期权权利金（Premium）极度昂贵，此时买入看跌期权性价比极低，应完全通过股票清仓规避下行风险。</li>`
+                : `<li>Hedging Ratio: <strong>Exit Positions Rather Than Buying Put Options</strong></li>
+                   <li>Action: Due to high VIX ($${latestVix.level.toFixed(1)}), put premiums are prohibitively expensive. Rely on equity exits and cash holding instead of buying expensive puts.</li>`;
         }
         
         tipsCard.style.borderLeft = `4px solid ${status.state_color}`;
@@ -614,6 +782,7 @@ export function renderTurbulenceChart(series) {
     const slowExtreme = filteredSeries.map(x => x.slow_extreme);
     const spxPrices = filteredSeries.map(x => x.spx);
     const probitProb = filteredSeries.map(x => x.probit_prob !== undefined ? (x.probit_prob * 100).toFixed(1) : 0);
+    const netLiq = filteredSeries.map(x => x.net_liq !== undefined ? x.net_liq : 0);
     
     const Chart = window.Chart;
     if (!Chart) {
@@ -690,6 +859,15 @@ export function renderTurbulenceChart(series) {
                     pointRadius: 0,
                     pointHoverRadius: 4,
                     yAxisID: 'y2'
+                },
+                {
+                    label: state.activeLang === 'zh' ? '美联储净流动性 (十亿美元)' : 'Net Liquidity ($B)',
+                    data: netLiq,
+                    borderColor: '#10b981', // Emerald Green
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    yAxisID: 'y3'
                 }
             ]
         },
@@ -781,6 +959,30 @@ export function renderTurbulenceChart(series) {
                     },
                     min: 0,
                     max: 100
+                },
+                y3: {
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: state.activeLang === 'zh' ? '美联储净流动性 (十亿美元)' : 'Net Liquidity ($B)',
+                        color: textColor,
+                        font: {
+                            size: 11
+                        }
+                    },
+                    ticks: {
+                        color: textColor,
+                        callback: function(value) {
+                            return '$' + value + 'B';
+                        },
+                        font: {
+                            family: 'JetBrains Mono',
+                            size: 10
+                        }
+                    }
                 }
             },
             plugins: {

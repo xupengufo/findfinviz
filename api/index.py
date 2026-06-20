@@ -1204,6 +1204,13 @@ def get_turbulence():
             "credit": {"level": 1.35, "dynamic_threshold": 1.40, "rolling_mean": 1.35, "below_dynamic": None, "stressed": None},
             "divergence": {"active": False},
             "probit": {"probability": 0.0, "is_warning": False, "z_value": 0.0},
+            "macro_plumbing": {
+                "walcl": 0.0, "tga": 0.0, "rrp": 0.0, "net_liq": 0.0, "net_liq_z_score": 0.0,
+                "sofr": 0.0, "iorb": 0.0, "sofr_iorb_spread": 0.0, "steepening_type": "NORMAL"
+            },
+            "labor": {
+                "iursa": 0.0, "icsa": 0, "sos_indicator": 0.0, "sos_warning": False
+            },
             "macro_contributors": [],
             "sector_contributors": []
         },

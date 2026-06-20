@@ -363,6 +363,106 @@
                     </div>
                 </div>
 
+                <!-- Macro Indicators Grid -->
+                <div class="filter-bar" style="margin-top: 24px;">
+                    <div class="filter-title">
+                        <i data-lucide="globe"></i>
+                        <h2 data-i18n="turb_macro_indicators">Macro Multi-Dimensional Leading Indicators (宏观多维领先预警指标)</h2>
+                    </div>
+                    <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+                        Real-time Federal Reserve monetary plumbing, funding pressures, and labor market margins. (美联储货币流动性管道、非银融资压力与劳动力边际变化指标)
+                    </div>
+                </div>
+
+                <div class="turb-macro-grid">
+                    <!-- Card 5: Net Liquidity -->
+                    <div class="turb-card surface-card macro-liq-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">Net Liquidity (美联储净流动性)</h3>
+                                <span id="macro-liq-z-badge" style="font-family: var(--font-mono); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(156, 163, 175, 0.15); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.35);">Z-Score: --</span>
+                            </div>
+                            <div class="pos-percentage font-data" style="margin: 12px 0 6px 0; font-size: 1.8rem; font-family: var(--font-mono); color: var(--text-primary);"><span id="macro-liq-val">--</span></div>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 0.72rem; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">WALCL (美联储总资产)</span>
+                                    <span id="macro-walcl-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">TGA (财政部现金账户)</span>
+                                    <span id="macro-tga-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">RRP (隔夜逆回购协议)</span>
+                                    <span id="macro-rrp-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.68rem; color: var(--text-muted); margin: 12px 0 0 0; line-height: 1.35; border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+                            计算公式: WALCL - TGA - RRP. 衡量商业银行体系的核心超额准备金。Z-Score &lt; 0 预示流动性紧缩，高度警惕成长股杀估值风险。
+                        </p>
+                    </div>
+
+                    <!-- Card 6: Funding Pressure & Yield Curve -->
+                    <div class="turb-card surface-card macro-funding-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">Funding & Curve (流动性压力与期限结构)</h3>
+                                <span id="macro-curve-badge" style="font-family: var(--font-sans); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(156, 163, 175, 0.15); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.35);">NORMAL</span>
+                            </div>
+                            <div class="pos-percentage font-data" style="margin: 12px 0 6px 0; font-size: 1.8rem; font-family: var(--font-mono); color: var(--text-primary);"><span id="macro-sofr-iorb-val">--</span> <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted);">bps</span></div>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 0.72rem; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">SOFR (担保隔夜融资利率)</span>
+                                    <span id="macro-sofr-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">IORB (准备金余额利率)</span>
+                                    <span id="macro-iorb-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Steepening Type (陡峭化形态)</span>
+                                    <span id="macro-steepening-val" style="font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">NORMAL</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.68rem; color: var(--text-muted); margin: 12px 0 0 0; line-height: 1.35; border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+                            SOFR - IORB 利差 &gt; 0 预示非银金融机构体系流动性吃紧，融资面临惩罚性溢价；Bull Steepener (牛陡) 多见于联储紧急降息应对衰退。
+                        </p>
+                    </div>
+
+                    <!-- Card 7: Labor SOS Indicator -->
+                    <div class="turb-card surface-card macro-labor-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">Labor SOS Warning (劳动力边际恶化指标)</h3>
+                                <span id="macro-labor-badge" style="font-family: var(--font-sans); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(156, 163, 175, 0.15); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.35);">NORMAL</span>
+                            </div>
+                            <div class="pos-percentage font-data" style="margin: 12px 0 6px 0; font-size: 1.8rem; font-family: var(--font-mono); color: var(--text-primary);"><span id="macro-labor-val">--</span></div>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 0.72rem; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">IURSA (持续申请失业率)</span>
+                                    <span id="macro-iursa-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">ICSA (初请失业金人数)</span>
+                                    <span id="macro-icsa-val" style="font-family: var(--font-mono); color: var(--text-secondary);">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Trigger Threshold (触发阈值)</span>
+                                    <span style="font-family: var(--font-mono); color: var(--text-secondary);">0.15 (警告) / 0.20 (崩溃)</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.68rem; color: var(--text-muted); margin: 12px 0 0 0; line-height: 1.35; border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+                            计算公式: 持续失业人数26周均值 - 52周最低值。劳动力变动 SOS 触发表明就业市场到达收缩拐点，常作为实体经济进入硬着陆的强领先信号。
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Attribution Diagnostics Panel -->
                 <div class="turb-attribution-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Macro Attribution Card -->

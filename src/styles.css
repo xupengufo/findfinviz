@@ -2137,5 +2137,24 @@ html[data-theme=dark] .tech-score-low {
     }
 }
 
+/* Macro Indicators Grid Layout */
+.turb-macro-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 24px;
+}
+@media (max-width: 1024px) {
+    .turb-macro-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 767px) {
+    .turb-macro-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
 
 

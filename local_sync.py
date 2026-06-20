@@ -20,6 +20,29 @@ def retry_with_backoff(func, max_retries=3, base_delay=2):
             print(f"  Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
             time.sleep(delay)
 
+import io
+
+def fetch_fred_csv(series_id):
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # Download with retry
+    def do_request():
+        res = requests.get(url, headers=headers, timeout=10)
+        res.raise_for_status()
+        return res
+    res = retry_with_backoff(do_request)
+    df = pd.read_csv(io.StringIO(res.text), na_values=['.'])
+    if 'observation_date' in df.columns:
+        df['DATE'] = pd.to_datetime(df['observation_date'])
+    elif 'DATE' in df.columns:
+        df['DATE'] = pd.to_datetime(df['DATE'])
+    else:
+        raise KeyError(f"Date column not found in FRED series {series_id}")
+    df[series_id] = pd.to_numeric(df[series_id], errors='coerce')
+    df = df.dropna().rename(columns={series_id: 'value'})
+    df = df.set_index('DATE')
+    return df
+
 # Load environment variables from .env.local
 env_file = ".env.local"
 if os.path.exists(env_file):
@@ -406,6 +429,47 @@ def calculate_market_turbulence():
     credit_rolling_std = credit_rolling_std.ffill().bfill().fillna(0.05)
     credit_dynamic_threshold = credit_rolling_mean + credit_rolling_std
     
+    # --- P0-5: Fetch historical FRED macro series and align ---
+    print("Fetching historical FRED macro series...")
+    fred_series = ["WALCL", "WDTGAL", "RRPONTTLD", "SOFR", "IORB", "IURSA", "ICSA"]
+    fred_dfs = {}
+    for sid in fred_series:
+        try:
+            fred_dfs[sid] = fetch_fred_csv(sid)
+        except Exception as fe:
+            print(f"Warning: Failed to fetch FRED series {sid}: {fe}. Using fallback mock data.")
+            mock_dates = pd.date_range(start="2016-01-01", end=pd.Timestamp.now().normalize(), freq='D')
+            mock_val = 0.0
+            if sid == "WALCL": mock_val = 6700000.0
+            elif sid == "WDTGAL": mock_val = 800000.0
+            elif sid == "RRPONTTLD": mock_val = 10.0
+            elif sid == "SOFR" or sid == "IORB": mock_val = 3.5
+            elif sid == "IURSA": mock_val = 1.2
+            elif sid == "ICSA": mock_val = 220000.0
+            mock_df = pd.DataFrame({'value': mock_val}, index=mock_dates)
+            fred_dfs[sid] = mock_df
+
+    df_fred = pd.DataFrame(index=df_prices.index)
+    for sid in fred_series:
+        union_index = df_prices.index.union(fred_dfs[sid].index)
+        df_fred[sid] = fred_dfs[sid]['value'].reindex(union_index).ffill().bfill().reindex(df_prices.index)
+        
+    # Calculate Net Liquidity (Billions)
+    df_fred['net_liq'] = df_fred['WALCL'] / 1000.0 - df_fred['WDTGAL'] / 1000.0 - df_fred['RRPONTTLD']
+    net_liq_mean = df_fred['net_liq'].rolling(504, min_periods=100).mean()
+    net_liq_std = df_fred['net_liq'].rolling(504, min_periods=100).std().clip(lower=1.0)
+    df_fred['net_liq_z'] = (df_fred['net_liq'] - net_liq_mean) / net_liq_std
+    df_fred['net_liq_z'] = df_fred['net_liq_z'].fillna(0.0)
+    
+    # SOFR-IORB spread
+    df_fred['sofr_iorb_spread'] = df_fred['SOFR'] - df_fred['IORB']
+    
+    # SOS Labor indicator
+    iursa_ma26 = df_fred['IURSA'].rolling(26 * 7, min_periods=100).mean()
+    iursa_min52 = df_fred['IURSA'].rolling(52 * 7, min_periods=252).min()
+    df_fred['sos_indicator'] = iursa_ma26 - iursa_min52
+    df_fred['sos_indicator'] = df_fred['sos_indicator'].fillna(0.0)
+    
     dates = df_returns_macro.index.intersection(df_returns_sector.index)
     df_returns_macro = df_returns_macro.loc[dates]
     df_returns_sector = df_returns_sector.loc[dates]
@@ -490,7 +554,19 @@ def calculate_market_turbulence():
             "macro_contrib": macro_contrib_dict,
             "sector_contrib": sector_contrib_dict,
             "macro_returns": macro_ret_dict,
-            "sector_returns": sector_ret_dict
+            "sector_returns": sector_ret_dict,
+            # FRED values
+            "walcl": float(df_fred.loc[current_date, 'WALCL']),
+            "tga": float(df_fred.loc[current_date, 'WDTGAL']),
+            "rrp": float(df_fred.loc[current_date, 'RRPONTTLD']),
+            "net_liq": float(df_fred.loc[current_date, 'net_liq']),
+            "net_liq_z": float(df_fred.loc[current_date, 'net_liq_z']),
+            "sofr": float(df_fred.loc[current_date, 'SOFR']),
+            "iorb": float(df_fred.loc[current_date, 'IORB']),
+            "sofr_iorb_spread": float(df_fred.loc[current_date, 'sofr_iorb_spread']),
+            "iursa": float(df_fred.loc[current_date, 'IURSA']),
+            "icsa": float(df_fred.loc[current_date, 'ICSA']),
+            "sos_indicator": float(df_fred.loc[current_date, 'sos_indicator'])
         })
         
     df_result = pd.DataFrame(turb_records)
@@ -532,7 +608,7 @@ def calculate_market_turbulence():
 
     # Use fillna + clip to protect against zero variance or NaNs
     df_result['x_vix'] = ((df_result['vix_raw'] - vix_fit_mean) / vix_fit_std.clip(lower=1.0)).fillna(0)
-    df_result['x_yc']  = ((df_result['yc_raw'] - yc_fit_mean) / yc_fit_std.clip(lower=0.1)).fillna(0)
+    df_result['x_yc']  = ((df_result['x_yc'] if 'x_yc' in df_result.columns else (df_result['yc_raw'] - yc_fit_mean) / yc_fit_std.clip(lower=0.1))).fillna(0)
     df_result['x_cs']  = ((df_result['cs_raw'] - cs_fit_mean) / cs_fit_std.clip(lower=0.1)).fillna(0)
     
     # Linear activation
@@ -542,14 +618,37 @@ def calculate_market_turbulence():
     df_result['probit_prob'] = 1.0 / (1.0 + np.exp(-df_result['probit_z']))
     df_result['probit_warning'] = df_result['probit_prob'] > 0.30
     
+    # Yield curve steepening classification (20-day changes)
+    df_result['yc_change_20d'] = df_result['yc_raw'] - df_result['yc_raw'].shift(20)
+    df_result['irx_change_20d'] = df_result['irx_level'] - df_result['irx_level'].shift(20)
+    df_result['tnx_change_20d'] = df_result['tnx_level'] - df_result['tnx_level'].shift(20)
+    
+    steepening_list = []
+    for idx, row in df_result.iterrows():
+        chg = row['yc_change_20d']
+        irx_chg = row['irx_change_20d']
+        tnx_chg = row['tnx_change_20d']
+        if pd.isna(chg):
+            steepening_list.append("NORMAL")
+        elif chg > 0.10: # steepened by >10bps
+            if irx_chg < 0:
+                steepening_list.append("BULL_STEEPENER")
+            elif tnx_chg > 0:
+                steepening_list.append("BEAR_STEEPENER")
+            else:
+                steepening_list.append("NORMAL")
+        else:
+            steepening_list.append("NORMAL")
+            
+    df_result['steepening_type'] = steepening_list
+    
     return df_result
 
 def process_turbulence_output(df_result):
     # Pre-calculate raw and smoothed position sizes for all dates
-    # P0-4: Danger Zone composite removed; position sizing uses macro turbulence
-    # distance + complacency + credit stress + Probit cap.
+    # P0-5: Warning levels correspond to Level I-IV, with dynamic cap scaling down to 0%.
     raw_positions = []
-    for _, row in df_result.iterrows():
+    for idx, row in df_result.iterrows():
         v_comp = row['vix_level'] < row['vix_dynamic_threshold']
         m_comp = row['move_level'] < row['move_dynamic_threshold']
         c_comp = row['credit_ratio'] < row['credit_dynamic_threshold']
@@ -565,13 +664,34 @@ def process_turbulence_output(df_result):
         else:
             hx = 0.0
 
-        probit_warn = bool(row['probit_warning'])
-        raw_pos = calculate_sigmoid_position(hx, any_comp, c_stressed, probit_warn)
-        if probit_warn:
-            # Dynamic cap on position size based on crash probability
-            probit_cap = 100.0 * (1.0 - float(row['probit_prob']))
-            raw_pos = min(raw_pos, probit_cap)
+        prob = float(row['probit_prob'])
+        st_type = str(row['steepening_type'])
+        sos = float(row['sos_indicator'])
+        
+        # Calculate daily state
+        daily_state = "NORMAL"
+        if h_macro_slow > h_extreme or sos >= 0.20:
+            daily_state = "CRITICAL"
+        elif prob > 0.50 or st_type == 'BULL_STEEPENER' or sos >= 0.15:
+            daily_state = "HIGH RISK"
+        elif prob > 0.30 or row['net_liq_z'] < 0 or row['sofr_iorb_spread'] > 0 or h_macro_slow > h_warn or c_stressed:
+            daily_state = "ELEVATED RISK"
 
+        # Calculate position using standard sigmoid
+        raw_pos = calculate_sigmoid_position(hx, any_comp, c_stressed, prob > 0.30)
+        
+        # Dynamic caps based on macro warning levels
+        if daily_state == "CRITICAL":
+            raw_pos = 0.0
+        elif daily_state == "HIGH RISK":
+            raw_pos = min(raw_pos, 25.0)
+            if prob > 0:
+                raw_pos = min(raw_pos, 100.0 * (1.0 - prob))
+        elif daily_state == "ELEVATED RISK":
+            raw_pos = min(raw_pos, 50.0)
+            if prob > 0:
+                raw_pos = min(raw_pos, 100.0 * (1.0 - prob))
+                
         raw_positions.append(raw_pos)
 
     df_result['position_raw'] = raw_positions
@@ -591,17 +711,17 @@ def process_turbulence_output(df_result):
 
     credit_stressed = bool(latest['credit_ratio'] > (latest['credit_rolling_mean'] + 1.5 * latest['credit_rolling_std']))
 
-    # P0-4: State is now purely Probit-driven (with macro-extreme backstop for CRITICAL).
-    # The old Danger Zone composite (33% hit rate) is retired.
+    # P0-5: Multi-dimensional Warning Level mapping
     probit_prob = float(latest['probit_prob'])
+    sos_indicator = float(latest['sos_indicator'])
+    steepening_type = str(latest['steepening_type'])
+    
     state = "NORMAL"
-    if latest['macro_slow'] > latest['macro_extreme']:
+    if latest['macro_slow'] > latest['macro_extreme'] or sos_indicator >= 0.20:
         state = "CRITICAL"
-    elif probit_prob > 0.50:
+    elif probit_prob > 0.50 or steepening_type == 'BULL_STEEPENER' or sos_indicator >= 0.15:
         state = "HIGH RISK"
-    elif probit_prob > 0.30:
-        state = "ELEVATED RISK"
-    elif macro_above_warn or sector_above_warn or credit_stressed:
+    elif probit_prob > 0.30 or latest['net_liq_z'] < 0 or latest['sofr_iorb_spread'] > 0 or macro_above_warn or sector_above_warn or credit_stressed:
         state = "ELEVATED RISK"
 
     state_flags = {
@@ -618,7 +738,7 @@ def process_turbulence_output(df_result):
         "CRITICAL": "#e71d36"
     }
     
-    position_size_pct = int(round(latest['position_smoothed']))
+    position_size_pct = int(round(latest['position_smoothed'])) if not pd.isna(latest['position_smoothed']) else 100
     
     chart_series = []
     for _, row in df_result.iterrows():
@@ -647,14 +767,24 @@ def process_turbulence_output(df_result):
             "move_dynamic_threshold": round(float(row['move_dynamic_threshold']), 2),
             "credit_ratio": round(float(row['credit_ratio']), 3),
             "credit_dynamic_threshold": round(float(row['credit_dynamic_threshold']), 3),
-            "danger_zone": bool(row['probit_warning']),  # P0-4: renamed semantically, kept key for frontend compat
+            "danger_zone": bool(row['probit_warning']),  # kept key for frontend compat
             "credit_stressed": c_stressed,
-            "position_size_pct": int(round(row['position_smoothed'])),
+            "position_size_pct": int(round(row['position_smoothed'])) if not pd.isna(row['position_smoothed']) else 100,
             "probit_prob": round(float(row['probit_prob']), 4),
-            "probit_warning": bool(row['probit_warning'])
+            "probit_warning": bool(row['probit_warning']),
+            # P0-5: Add macro plumbing & labor indicators to chart
+            "net_liq": round(float(row['net_liq']), 2),
+            "net_liq_z": round(float(row['net_liq_z']), 3),
+            "sofr": round(float(row['sofr']), 3),
+            "iorb": round(float(row['iorb']), 3),
+            "sofr_iorb_spread": round(float(row['sofr_iorb_spread']), 3),
+            "iursa": round(float(row['iursa']), 2),
+            "icsa": int(row['icsa']) if not pd.isna(row['icsa']) else 0,
+            "sos_indicator": round(float(row['sos_indicator']), 3),
+            "steepening_type": str(row['steepening_type'])
         })
 
-    # P0-4: Record Probit warning periods (probit_prob > 0.30) instead of old Danger Zone
+    # P0-4: Record Probit warning periods (probit_prob > 0.30)
     probit_periods = []
     in_period = False
     start_date = None
@@ -786,6 +916,24 @@ def process_turbulence_output(df_result):
                 "x_vix": round(float(latest['x_vix']), 4),
                 "x_yc": round(float(latest['x_yc']), 4),
                 "x_cs": round(float(latest['x_cs']), 4)
+            },
+            # P0-5: Add macro plumbing & labor indicators to status
+            "macro_plumbing": {
+                "walcl": round(float(latest['walcl']), 2),
+                "tga": round(float(latest['tga']), 2),
+                "rrp": round(float(latest['rrp']), 2),
+                "net_liq": round(float(latest['net_liq']), 2),
+                "net_liq_z_score": round(float(latest['net_liq_z']), 3),
+                "sofr": round(float(latest['sofr']), 3),
+                "iorb": round(float(latest['iorb']), 3),
+                "sofr_iorb_spread": round(float(latest['sofr_iorb_spread']), 3),
+                "steepening_type": str(latest['steepening_type'])
+            },
+            "labor": {
+                "iursa": round(float(latest['iursa']), 3),
+                "icsa": int(latest['icsa']) if not pd.isna(latest['icsa']) else 0,
+                "sos_indicator": round(float(latest['sos_indicator']), 3),
+                "sos_warning": bool(latest['sos_indicator'] >= 0.20)
             },
             "macro_contributors": macro_contribs_list,
             "sector_contributors": sector_contribs_list
