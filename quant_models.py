@@ -34,14 +34,45 @@ def retry_with_backoff(func, max_retries=3, base_delay=2):
             time.sleep(delay)
 
 def fetch_fred_csv(series_id):
+    api_key = os.environ.get("FRED_API_KEY")
+    if api_key:
+        print(f"  Using official FRED API for series {series_id}...")
+        url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={api_key}&file_type=json"
+        def do_request():
+            headers = {"User-Agent": random.choice(USER_AGENTS)}
+            res = requests.get(url, headers=headers, timeout=20)
+            res.raise_for_status()
+            return res
+        try:
+            res = retry_with_backoff(do_request)
+            data = res.json()
+            obs = data.get("observations", [])
+            dates = []
+            values = []
+            for o in obs:
+                val_str = o.get("value")
+                if val_str == ".":
+                    continue
+                try:
+                    val = float(val_str)
+                    dates.append(pd.to_datetime(o["date"]))
+                    values.append(val)
+                except (ValueError, TypeError):
+                    continue
+            df = pd.DataFrame({"value": values}, index=dates)
+            df.index.name = 'DATE'
+            return df
+        except Exception as api_err:
+            print(f"  Official FRED API failed for {series_id}: {api_err}. Falling back to CSV scrape...")
+
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
     # Download with retry
-    def do_request():
+    def do_request_csv():
         headers = {"User-Agent": random.choice(USER_AGENTS)}
         res = requests.get(url, headers=headers, timeout=20)
         res.raise_for_status()
         return res
-    res = retry_with_backoff(do_request)
+    res = retry_with_backoff(do_request_csv)
     df = pd.read_csv(io.StringIO(res.text), na_values=['.'])
     if 'observation_date' in df.columns:
         df['DATE'] = pd.to_datetime(df['observation_date'])
@@ -53,6 +84,7 @@ def fetch_fred_csv(series_id):
     df = df.dropna().rename(columns={series_id: 'value'})
     df = df.set_index('DATE')
     return df
+
 
 def get_ew_cov_and_mean(history, halflife=63):
     """Calculate exponentially weighted mean and covariance matrix."""
