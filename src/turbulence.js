@@ -202,7 +202,7 @@ export function renderTurbulence(payload) {
     
     // 2.7 Render Macro Plumbing Cards (Liquidity, Funding, Labor)
     const macroPlumbing = status.macro_plumbing || {};
-    const labor = status.labor_plumbing || {};
+    const labor = status.labor || status.labor_plumbing || {};
     
     // 2.7.1 Net Liquidity Card
     const liqVal = document.getElementById('macro-liq-val');
