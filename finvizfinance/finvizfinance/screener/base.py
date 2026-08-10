@@ -123,11 +123,16 @@ class Base:
             cols = row.findAll("td")[1:]
             info_dict = {}
             for i, col in enumerate(cols):
+                # FinViz ticker cells now prepend a logo fallback span holding the
+                # ticker's first letter, so col.text duplicates it (e.g. "JJWEL").
+                # The real ticker text lives in the trailing "tab-link" anchor.
+                ticker_link = col.find("a", class_="tab-link")
+                col_text = ticker_link.text if ticker_link else col.text
                 # check if the col is number
                 if i not in num_col_index:
-                    info_dict[table_header[i]] = col.text
+                    info_dict[table_header[i]] = col_text
                 else:
-                    info_dict[table_header[i]] = number_covert(col.text)
+                    info_dict[table_header[i]] = number_covert(col_text)
             frame.append(info_dict)
         if len(df) == 0:
             return pd.DataFrame(frame)

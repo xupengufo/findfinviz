@@ -80,12 +80,17 @@ class Insider:
                 continue
             info_dict = {}
             for i, col in enumerate(cols):
+                # FinViz ticker cells now prepend a logo fallback span holding the
+                # ticker's first letter, so col.text duplicates it (e.g. "AATTO").
+                # The real ticker text lives in the trailing "tab-link" anchor.
+                ticker_link = col.find("a", class_="tab-link")
+                col_text = ticker_link.text if ticker_link else col.text
                 if i not in num_col_index:
-                    info_dict[table_header[i]] = col.text
+                    info_dict[table_header[i]] = col_text
                     if i == len(cols) - 1:
                         info_dict["SEC Form 4 Link"] = col.find("a").attrs["href"]
                 else:
-                    info_dict[table_header[i]] = number_covert(col.text)
+                    info_dict[table_header[i]] = number_covert(col_text)
                 info_dict["SEC Form 4 Link"] = cols[-1].find("a").attrs["href"]
             frame.append(info_dict)
         df = pd.DataFrame(frame)
