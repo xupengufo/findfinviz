@@ -424,7 +424,15 @@ def get_institutional_flow(type: str = "accumulation"):
 def get_super_investors(fund: Optional[str] = "all"):
     from scoring_config import SUPER_INVESTORS_DATA
     cached_super = cache.get("super_investors_data")
-    all_data = cached_super if (cached_super and isinstance(cached_super, dict)) else SUPER_INVESTORS_DATA
+    
+    # Merge baseline with cached dynamic data to guarantee all funds exist
+    all_data = {k: dict(v) for k, v in SUPER_INVESTORS_DATA.items()}
+    if cached_super and isinstance(cached_super, dict):
+        for k, v in cached_super.items():
+            if k in all_data and isinstance(v, dict):
+                all_data[k].update(v)
+            elif isinstance(v, dict):
+                all_data[k] = v
     
     if fund and fund != "all":
         if fund not in all_data:
