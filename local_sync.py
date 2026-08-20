@@ -153,7 +153,16 @@ def sync_super_investors():
         "renaissance": "0001037389",
         "pershing": "0001336528",
         "appaloosa": "0001006438",
-        "greenwoods": "0001550974"
+        "greenwoods": "0001848138",
+        "himalaya": "0001709323",
+        "duanyongping": "0001755767",
+        "hillhouse": "0001762304",
+        "scion": "0001649339",
+        "duquesne": "0001536411",
+        "tiger_global": "0001167483",
+        "ark": "0001697748",
+        "oaktree": "0000949509",
+        "baupost": "0001061768"
     }
 
     updated_data = {}

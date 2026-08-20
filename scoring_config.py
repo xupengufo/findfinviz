@@ -408,6 +408,210 @@ SUPER_INVESTORS_DATA = {
             {"ticker": "FUTU", "company": "Futu Holdings Ltd", "weight": "4.1%", "shares": "1.8M", "value": "$155M", "action": "buy", "sector": "Financial"},
             {"ticker": "DOX", "company": "Amdocs Limited", "weight": "3.2%", "shares": "1.4M", "value": "$122M", "action": "hold", "sector": "Technology"}
         ]
+    },
+    "himalaya": {
+        "id": "himalaya",
+        "manager_en": "Li Lu",
+        "manager_zh": "李录 / 喜马拉雅资本",
+        "fund_name_en": "Himalaya Capital Management",
+        "fund_name_zh": "喜马拉雅资本 (查理·芒格家族基金)",
+        "avatar": "🏔️",
+        "portfolio_value": "$2.4B",
+        "top_holdings_count": 6,
+        "style_en": "Deep Value & Munger Discipleship",
+        "style_zh": "芒格正统价值投资与长期复利",
+        "holdings": [
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "32.5%", "shares": "4.2M", "value": "$780M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "GOOG", "company": "Alphabet Inc Class C", "weight": "26.2%", "shares": "3.4M", "value": "$630M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "BAC", "company": "Bank of America", "weight": "18.5%", "shares": "9.8M", "value": "$445M", "action": "hold", "sector": "Financial"},
+            {"ticker": "BRK.B", "company": "Berkshire Hathaway Class B", "weight": "12.4%", "shares": "650K", "value": "$298M", "action": "hold", "sector": "Financial"},
+            {"ticker": "EWBC", "company": "East West Bancorp", "weight": "6.8%", "shares": "1.7M", "value": "$163M", "action": "hold", "sector": "Financial"},
+            {"ticker": "AAPL", "company": "Apple Inc", "weight": "3.6%", "shares": "380K", "value": "$86M", "action": "buy", "sector": "Technology"}
+        ]
+    },
+    "duanyongping": {
+        "id": "duanyongping",
+        "manager_en": "Duan Yongping",
+        "manager_zh": "段永平 / 大道投资",
+        "fund_name_en": "H&H International Investment",
+        "fund_name_zh": "H&H 国际投资 (大道无形我有形)",
+        "avatar": "💡",
+        "portfolio_value": "$14.8B",
+        "top_holdings_count": 8,
+        "style_en": "Business Model Moats & Concentration",
+        "style_zh": "长坡厚雪商业模式与超级集中",
+        "holdings": [
+            {"ticker": "AAPL", "company": "Apple Inc", "weight": "68.2%", "shares": "44.5M", "value": "$10.1B", "action": "hold", "sector": "Technology"},
+            {"ticker": "BRK.B", "company": "Berkshire Hathaway Class B", "weight": "14.5%", "shares": "4.7M", "value": "$2.15B", "action": "hold", "sector": "Financial"},
+            {"ticker": "PDD", "company": "PDD Holdings Inc", "weight": "5.8%", "shares": "7.2M", "value": "$860M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "4.2%", "shares": "3.4M", "value": "$620M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "TCEHY", "company": "Tencent Holdings ADR", "weight": "3.1%", "shares": "9.5M", "value": "$460M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "DIS", "company": "Walt Disney Co", "weight": "1.8%", "shares": "2.4M", "value": "$265M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "OXY", "company": "Occidental Petroleum", "weight": "1.2%", "shares": "3.4M", "value": "$180M", "action": "hold", "sector": "Energy"},
+            {"ticker": "BABA", "company": "Alibaba Group Holding", "weight": "1.2%", "shares": "1.8M", "value": "$175M", "action": "buy", "sector": "Consumer Cyclical"}
+        ]
+    },
+    "hillhouse": {
+        "id": "hillhouse",
+        "manager_en": "Zhang Lei",
+        "manager_zh": "张磊 / 高瓴资本",
+        "fund_name_en": "HHLR Advisors (Hillhouse)",
+        "fund_name_zh": "高瓴资本 HHLR (重仓中概与硬科技)",
+        "avatar": "🦅",
+        "portfolio_value": "$4.5B",
+        "top_holdings_count": 10,
+        "style_en": "Long-Term Value & Healthcare Tech",
+        "style_zh": "长期主义价值投资与生命科技",
+        "holdings": [
+            {"ticker": "PDD", "company": "PDD Holdings Inc", "weight": "22.8%", "shares": "8.5M", "value": "$1.02B", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "BABA", "company": "Alibaba Group Holding", "weight": "15.4%", "shares": "7.1M", "value": "$690M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "BEKE", "company": "KE Holdings Inc (贝壳)", "weight": "10.2%", "shares": "23.5M", "value": "$460M", "action": "buy", "sector": "Real Estate"},
+            {"ticker": "NTES", "company": "NetEase Inc", "weight": "8.5%", "shares": "3.8M", "value": "$380M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "FUTU", "company": "Futu Holdings Ltd", "weight": "7.2%", "shares": "3.7M", "value": "$325M", "action": "buy", "sector": "Financial"},
+            {"ticker": "JD", "company": "JD.com Inc", "weight": "6.1%", "shares": "7.6M", "value": "$275M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "CPNG", "company": "Coupang Inc", "weight": "5.4%", "shares": "10.2M", "value": "$245M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "BGNE", "company": "BeiGene Ltd", "weight": "4.8%", "shares": "1.1M", "value": "$215M", "action": "hold", "sector": "Healthcare"},
+            {"ticker": "ASML", "company": "ASML Holding NV", "weight": "3.9%", "shares": "210K", "value": "$175M", "action": "buy", "sector": "Technology"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "3.2%", "shares": "340K", "value": "$145M", "action": "hold", "sector": "Technology"}
+        ]
+    },
+    "scion": {
+        "id": "scion",
+        "manager_en": "Michael Burry",
+        "manager_zh": "迈克尔·伯里 (大空头)",
+        "fund_name_en": "Scion Asset Management",
+        "fund_name_zh": "塞恩资产 (《大空头》原型传奇操盘)",
+        "avatar": "🔍",
+        "portfolio_value": "$180M",
+        "top_holdings_count": 8,
+        "style_en": "Deep Contrarian & Macro Timing",
+        "style_zh": "极度敏锐逆向择时与低估值抄底",
+        "holdings": [
+            {"ticker": "BABA", "company": "Alibaba Group Holding", "weight": "18.5%", "shares": "340K", "value": "$33.3M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "JD", "company": "JD.com Inc", "weight": "15.2%", "shares": "760K", "value": "$27.4M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "BIDU", "company": "Baidu Inc", "weight": "12.8%", "shares": "250K", "value": "$23.0M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "FOUR", "company": "Shift4 Payments", "weight": "8.5%", "shares": "170K", "value": "$15.3M", "action": "new", "sector": "Technology"},
+            {"ticker": "C", "company": "Citigroup Inc", "weight": "7.4%", "shares": "210K", "value": "$13.3M", "action": "hold", "sector": "Financial"},
+            {"ticker": "REAL", "company": "The RealReal Inc", "weight": "6.2%", "shares": "2.8M", "value": "$11.2M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "OLN", "company": "Olin Corporation", "weight": "5.8%", "shares": "220K", "value": "$10.4M", "action": "hold", "sector": "Basic Materials"},
+            {"ticker": "ACEL", "company": "Accel Entertainment", "weight": "5.1%", "shares": "850K", "value": "$9.2M", "action": "hold", "sector": "Consumer Cyclical"}
+        ]
+    },
+    "duquesne": {
+        "id": "duquesne",
+        "manager_en": "Stanley Druckenmiller",
+        "manager_zh": "斯坦利·德鲁肯米勒",
+        "fund_name_en": "Duquesne Family Office",
+        "fund_name_zh": "杜肯家族办公室 (索罗斯前首席操盘手)",
+        "avatar": "⚔️",
+        "portfolio_value": "$3.2B",
+        "top_holdings_count": 10,
+        "style_en": "Macro Momentum & AI Pioneers",
+        "style_zh": "顶级宏观趋势与全球 AI 基础设施",
+        "holdings": [
+            {"ticker": "NVO", "company": "Novo Nordisk A/S", "weight": "12.5%", "shares": "3.7M", "value": "$400M", "action": "hold", "sector": "Healthcare"},
+            {"ticker": "CPNG", "company": "Coupang Inc", "weight": "11.2%", "shares": "14.9M", "value": "$358M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "8.9%", "shares": "670K", "value": "$285M", "action": "reduce", "sector": "Technology"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "7.8%", "shares": "1.9M", "value": "$250M", "action": "reduce", "sector": "Technology"},
+            {"ticker": "WMT", "company": "Walmart Inc", "weight": "6.5%", "shares": "2.4M", "value": "$208M", "action": "buy", "sector": "Consumer Defensive"},
+            {"ticker": "GE", "company": "GE Aerospace", "weight": "5.8%", "shares": "1.0M", "value": "$185M", "action": "buy", "sector": "Industrials"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "5.2%", "shares": "860K", "value": "$166M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "VST", "company": "Vistra Corp", "weight": "4.8%", "shares": "1.2M", "value": "$154M", "action": "buy", "sector": "Utilities"},
+            {"ticker": "COHR", "company": "Coherent Corp", "weight": "4.2%", "shares": "1.4M", "value": "$134M", "action": "new", "sector": "Technology"},
+            {"ticker": "LLY", "company": "Eli Lilly and Co", "weight": "3.8%", "shares": "150K", "value": "$122M", "action": "hold", "sector": "Healthcare"}
+        ]
+    },
+    "tiger_global": {
+        "id": "tiger_global",
+        "manager_en": "Chase Coleman",
+        "manager_zh": "蔡斯·科尔曼 / 老虎环球",
+        "fund_name_en": "Tiger Global Management",
+        "fund_name_zh": "老虎环球 (全球顶级科技成长对冲)",
+        "avatar": "🐯",
+        "portfolio_value": "$12.5B",
+        "top_holdings_count": 10,
+        "style_en": "High-Growth Tech Unicorns",
+        "style_zh": "全球超级科技巨头与 SaaS 成长先锋",
+        "holdings": [
+            {"ticker": "META", "company": "Meta Platforms Inc", "weight": "21.5%", "shares": "4.8M", "value": "$2.69B", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "15.8%", "shares": "4.6M", "value": "$1.98B", "action": "hold", "sector": "Technology"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "12.4%", "shares": "8.5M", "value": "$1.55B", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "9.8%", "shares": "6.3M", "value": "$1.22B", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "7.5%", "shares": "7.2M", "value": "$938M", "action": "buy", "sector": "Technology"},
+            {"ticker": "SE", "company": "Sea Limited", "weight": "6.2%", "shares": "7.8M", "value": "$775M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "NOW", "company": "ServiceNow Inc", "weight": "5.4%", "shares": "720K", "value": "$675M", "action": "hold", "sector": "Technology"},
+            {"ticker": "UBER", "company": "Uber Technologies", "weight": "4.8%", "shares": "8.1M", "value": "$600M", "action": "buy", "sector": "Technology"},
+            {"ticker": "FLUT", "company": "Flutter Entertainment", "weight": "3.9%", "shares": "1.9M", "value": "$488M", "action": "new", "sector": "Consumer Cyclical"},
+            {"ticker": "CRWD", "company": "CrowdStrike Holdings", "weight": "3.2%", "shares": "1.1M", "value": "$400M", "action": "hold", "sector": "Technology"}
+        ]
+    },
+    "ark": {
+        "id": "ark",
+        "manager_en": "Cathie Wood",
+        "manager_zh": "凯瑟琳·伍德 (木头姐)",
+        "fund_name_en": "ARK Invest",
+        "fund_name_zh": "方舟投资 (颠覆式创新与硬科技)",
+        "avatar": "🚀",
+        "portfolio_value": "$11.2B",
+        "top_holdings_count": 10,
+        "style_en": "Disruptive Innovation & High Beta",
+        "style_zh": "颠覆式创新科技与高弹性成长",
+        "holdings": [
+            {"ticker": "TSLA", "company": "Tesla Inc", "weight": "11.8%", "shares": "5.9M", "value": "$1.32B", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "COIN", "company": "Coinbase Global", "weight": "9.2%", "shares": "4.1M", "value": "$1.03B", "action": "hold", "sector": "Financial"},
+            {"ticker": "ROKU", "company": "Roku Inc", "weight": "7.8%", "shares": "11.2M", "value": "$874M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "PLTR", "company": "Palantir Technologies", "weight": "6.5%", "shares": "15.8M", "value": "$728M", "action": "buy", "sector": "Technology"},
+            {"ticker": "SQ", "company": "Block Inc", "weight": "5.9%", "shares": "8.6M", "value": "$661M", "action": "hold", "sector": "Technology"},
+            {"ticker": "CRSP", "company": "CRISPR Therapeutics", "weight": "5.2%", "shares": "10.5M", "value": "$582M", "action": "buy", "sector": "Healthcare"},
+            {"ticker": "HOOD", "company": "Robinhood Markets", "weight": "4.8%", "shares": "18.5M", "value": "$538M", "action": "buy", "sector": "Financial"},
+            {"ticker": "SHOP", "company": "Shopify Inc", "weight": "4.2%", "shares": "4.9M", "value": "$470M", "action": "hold", "sector": "Technology"},
+            {"ticker": "PATH", "company": "UiPath Inc", "weight": "3.8%", "shares": "28.5M", "value": "$425M", "action": "hold", "sector": "Technology"},
+            {"ticker": "RKLB", "company": "Rocket Lab USA", "weight": "3.2%", "shares": "16.8M", "value": "$358M", "action": "buy", "sector": "Industrials"}
+        ]
+    },
+    "oaktree": {
+        "id": "oaktree",
+        "manager_en": "Howard Marks",
+        "manager_zh": "霍华德·马克斯 / 橡树资本",
+        "fund_name_en": "Oaktree Capital Management",
+        "fund_name_zh": "橡树资本 (《周期》作者 / 不良资产先锋)",
+        "avatar": "🌳",
+        "portfolio_value": "$7.4B",
+        "top_holdings_count": 8,
+        "style_en": "Distressed Debt & Cyclical Value",
+        "style_zh": "周期逆向投资与高安全边际",
+        "holdings": [
+            {"ticker": "TRMD", "company": "TORM plc", "weight": "14.5%", "shares": "35.2M", "value": "$1.07B", "action": "hold", "sector": "Energy"},
+            {"ticker": "CVI", "company": "CVR Energy Inc", "weight": "11.8%", "shares": "32.1M", "value": "$873M", "action": "hold", "sector": "Energy"},
+            {"ticker": "VIST", "company": "Vista Energy S.A.B.", "weight": "8.2%", "shares": "11.8M", "value": "$607M", "action": "buy", "sector": "Energy"},
+            {"ticker": "VALE", "company": "Vale S.A.", "weight": "6.5%", "shares": "43.5M", "value": "$481M", "action": "hold", "sector": "Basic Materials"},
+            {"ticker": "CHTR", "company": "Charter Communications", "weight": "5.8%", "shares": "1.2M", "value": "$429M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "PBR", "company": "Petrobras ADR", "weight": "4.9%", "shares": "26.5M", "value": "$363M", "action": "hold", "sector": "Energy"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "4.2%", "shares": "1.7M", "value": "$311M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "ALL", "company": "Allstate Corp", "weight": "3.6%", "shares": "1.4M", "value": "$266M", "action": "hold", "sector": "Financial"}
+        ]
+    },
+    "baupost": {
+        "id": "baupost",
+        "manager_en": "Seth Klarman",
+        "manager_zh": "赛斯·卡拉曼 / 鲍波斯特",
+        "fund_name_en": "Baupost Group",
+        "fund_name_zh": "鲍波斯特集团 (《安全边际》作者)",
+        "avatar": "🛡️",
+        "portfolio_value": "$5.1B",
+        "top_holdings_count": 8,
+        "style_en": "Margin of Safety & Distressed Value",
+        "style_zh": "极致安全边际与复杂特殊机遇",
+        "holdings": [
+            {"ticker": "VRNT", "company": "Verint Systems Inc", "weight": "16.5%", "shares": "28.5M", "value": "$841M", "action": "hold", "sector": "Technology"},
+            {"ticker": "FIS", "company": "Fidelity National Info", "weight": "14.2%", "shares": "8.9M", "value": "$724M", "action": "buy", "sector": "Technology"},
+            {"ticker": "CRH", "company": "CRH plc", "weight": "12.8%", "shares": "6.8M", "value": "$653M", "action": "hold", "sector": "Basic Materials"},
+            {"ticker": "WBD", "company": "Warner Bros Discovery", "weight": "9.5%", "shares": "58.2M", "value": "$485M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "8.2%", "shares": "2.3M", "value": "$418M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "VTRS", "company": "Viatris Inc", "weight": "7.1%", "shares": "31.5M", "value": "$362M", "action": "hold", "sector": "Healthcare"},
+            {"ticker": "QSR", "company": "Restaurant Brands Intl", "weight": "6.4%", "shares": "4.5M", "value": "$326M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "UNH", "company": "UnitedHealth Group", "weight": "4.8%", "shares": "420K", "value": "$245M", "action": "new", "sector": "Healthcare"}
+        ]
     }
 }
 
