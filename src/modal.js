@@ -264,6 +264,89 @@ export async function openModal(ticker) {
             }
         }
 
+        // Render Top Institutional & Mutual Fund Holders
+        const instPanel = document.getElementById('modal-inst-panel');
+        const instMetrics = document.getElementById('modal-inst-metrics');
+        const instContent = document.getElementById('modal-inst-content');
+        if (instPanel && instContent) {
+            const instHolders = stockData.institutional_holders || [];
+            const mfHolders = stockData.mutualfund_holders || [];
+
+            let instHeldText = f['Inst Own'] || f['Institutional Ownership'] || '-';
+            let instTransText = f['Inst Trans'] || f['Institutional Transactions'] || '';
+
+            if (instMetrics) {
+                instMetrics.innerHTML = `
+                    <span class="weight-chip fund">${state.activeLang === 'zh' ? '机构持股' : 'Inst Own'}: ${escapeHtml(String(instHeldText))}</span>
+                    ${instTransText ? `<span class="weight-chip tech">${state.activeLang === 'zh' ? '近3月变动' : '3M Trans'}: ${escapeHtml(String(instTransText))}</span>` : ''}
+                `;
+            }
+
+            if (instHolders.length === 0 && mfHolders.length === 0) {
+                instContent.innerHTML = `<p style="font-size: 0.75rem; color: var(--text-muted); margin: 4px 0 0 0;">${translations[state.activeLang].modal_no_inst_holders}</p>`;
+            } else {
+                let html = `
+                    <div class="modal-inst-table-wrap">
+                        <table class="modal-inst-table">
+                            <thead>
+                                <tr>
+                                    <th>${translations[state.activeLang].th_holder}</th>
+                                    <th>${translations[state.activeLang].th_shares}</th>
+                                    <th>${translations[state.activeLang].th_value}</th>
+                                    <th>${translations[state.activeLang].th_pct_change}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                instHolders.slice(0, 8).forEach(h => {
+                    const shares = h.Shares ? formatNumber(h.Shares) : '-';
+                    const val = h.Value ? formatMarketCap(h.Value) : '-';
+                    let pctChangeText = '-';
+                    let pctClass = 'trans-neutral';
+                    if (h.pctChange !== undefined && h.pctChange !== null && h.pctChange !== '') {
+                        const num = typeof h.pctChange === 'number' ? h.pctChange * 100 : parseFloat(h.pctChange);
+                        if (!isNaN(num)) {
+                            pctChangeText = (num > 0 ? '+' : '') + num.toFixed(2) + '%';
+                            pctClass = num > 0 ? 'trans-positive' : (num < 0 ? 'trans-negative' : 'trans-neutral');
+                        }
+                    }
+
+                    html += `
+                        <tr>
+                            <td class="holder-name" title="${escapeHtml(h.Holder || '-')}">${escapeHtml(h.Holder || '-')}</td>
+                            <td class="font-data">${shares}</td>
+                            <td class="font-data font-semibold">$${val}</td>
+                            <td><span class="inst-trans-chip ${pctClass}">${pctChangeText}</span></td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                if (mfHolders.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-subtle);">
+                            <div style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">
+                                ${state.activeLang === 'zh' ? '📌 主要公募基金持仓 (Mutual Funds)' : '📌 Top Mutual Fund Holders'}
+                            </div>
+                            <div class="tag-container">
+                    `;
+                    mfHolders.slice(0, 4).forEach(mf => {
+                        const mfVal = mf.Value ? formatMarketCap(mf.Value) : '';
+                        html += `<span class="etf-tag" title="${escapeHtml(mf.Holder || '')}">${escapeHtml(mf.Holder || '')} ${mfVal ? `($${mfVal})` : ''}</span>`;
+                    });
+                    html += `</div></div>`;
+                }
+
+                instContent.innerHTML = html;
+            }
+        }
+
         // Render News Feed
         const newsContainer = document.getElementById('modal-news-list');
         if (newsContainer) {

@@ -114,6 +114,34 @@ def sync_insiders():
         except Exception as e:
             print(f"Failed to scrape insider option '{opt}' after retries:", e)
 
+def sync_institutional_flow():
+    from scoring_config import INSTITUTIONAL_FILTERS, INSTITUTIONAL_COLUMNS
+    print("Scraping institutional flow & smart money...")
+    for ftype, filters in INSTITUTIONAL_FILTERS.items():
+        print(f"  -> Scraping institutional flow: {ftype}")
+        def do_scrape(filt=filters):
+            fcustom = Custom()
+            fcustom.set_filter(filters_dict=filt)
+            return fcustom.screener_view(
+                limit=100,
+                order="Market Cap.",
+                ascend=False,
+                verbose=0,
+                columns=INSTITUTIONAL_COLUMNS
+            )
+        try:
+            df = retry_with_backoff(do_scrape)
+            data = []
+            if df is not None:
+                df = df.copy().fillna("")
+                if "Change %" in df.columns:
+                    df["Change"] = df["Change %"]
+                data = df.to_dict(orient="records")
+            push_to_kv(f"inst_flow_{ftype}", data)
+            time.sleep(1.5)
+        except Exception as e:
+            print(f"Failed to scrape institutional flow '{ftype}':", e)
+
 def sync_sectors():
     print("Scraping sector performance matrix...")
     def do_scrape_sec():
@@ -477,6 +505,7 @@ def run_all_sync():
     for step_name, step_func in [
         ("opportunities", sync_opportunities),
         ("insiders", sync_insiders),
+        ("institutional_flow", sync_institutional_flow),
         ("sectors", sync_sectors),
         ("reddit", sync_reddit),
         ("turbulence", sync_turbulence),

@@ -227,39 +227,139 @@
                 </div>
             </section>
 
-            <!-- Insider Sentiment Tab -->
+            <!-- Insider Sentiment / Smart Money Tab -->
             <section id="insider-tab" class="tab-content">
                 <div class="filter-bar">
                     <div class="filter-title">
-                        <i data-lucide="trending-up"></i>
-                        <h2 data-i18n="insider_title">Executive & Insider Trades</h2>
+                        <i data-lucide="landmark"></i>
+                        <h2 data-i18n="insider_title">Smart Money & Institutional Tracker</h2>
                     </div>
-                    <div class="option-selector segmented">
+
+                    <!-- Main Sub-tab Switcher -->
+                    <div class="insider-subtab-selector segmented" id="insider-subtab-selector" style="margin-top: 10px; align-self: flex-start;">
+                        <button class="insider-subtab-btn active" data-subtab="insider">
+                            <i data-lucide="user-check"></i>
+                            <span data-i18n="subtab_insider">Executive Trades (Form 4)</span>
+                        </button>
+                        <button class="insider-subtab-btn" data-subtab="inst_flow">
+                            <i data-lucide="trending-up"></i>
+                            <span data-i18n="subtab_inst_flow">Institutional Flow</span>
+                        </button>
+                        <button class="insider-subtab-btn" data-subtab="super_investors">
+                            <i data-lucide="crown"></i>
+                            <span data-i18n="subtab_super_investors">13F Super Investors</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Subpanel 1: Insider Trades (Form 4) -->
+                <div id="subpanel-insider" class="insider-subpanel active" style="margin-top: 12px;">
+                    <div class="option-selector segmented" style="margin-bottom: 12px; align-self: flex-start;">
                         <button class="option-btn active" data-option="top owner trade" data-i18n="opt_top_owner">Top Owner Trades</button>
                         <button class="option-btn" data-option="latest" data-i18n="opt_latest">Latest Transactions</button>
                         <button class="option-btn" data-option="top week" data-i18n="opt_top_week">Top Week</button>
                     </div>
+                    <div class="table-container surface-card">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_ticker">Ticker</th>
+                                    <th data-i18n="th_relation">Relationship</th>
+                                    <th data-i18n="th_date">Date</th>
+                                    <th data-i18n="th_txn">Transaction</th>
+                                    <th data-i18n="th_cost">Cost ($)</th>
+                                    <th data-i18n="th_shares">Shares</th>
+                                    <th data-i18n="th_value">Value ($)</th>
+                                    <th data-i18n="th_total_shares">Total Shares</th>
+                                    <th data-i18n="th_sec_form">SEC Form 4</th>
+                                </tr>
+                            </thead>
+                            <tbody id="insider-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div class="table-container surface-card">
-                    <table class="premium-table">
-                        <thead>
-                            <tr>
-                                <th data-i18n="th_ticker">Ticker</th>
-                                <th data-i18n="th_relation">Relationship</th>
-                                <th data-i18n="th_date">Date</th>
-                                <th data-i18n="th_txn">Transaction</th>
-                                <th data-i18n="th_cost">Cost ($)</th>
-                                <th data-i18n="th_shares">Shares</th>
-                                <th data-i18n="th_value">Value ($)</th>
-                                <th data-i18n="th_total_shares">Total Shares</th>
-                                <th data-i18n="th_sec_form">SEC Form 4</th>
-                            </tr>
-                        </thead>
-                        <tbody id="insider-table-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
-                    </table>
+                <!-- Subpanel 2: Institutional Flow -->
+                <div id="subpanel-inst-flow" class="insider-subpanel" style="display: none; margin-top: 12px;">
+                    <div class="inst-flow-selector segmented" style="margin-bottom: 12px; align-self: flex-start;">
+                        <button class="inst-flow-btn active" data-inst-option="accumulation">
+                            <i data-lucide="zap"></i>
+                            <span data-i18n="inst_opt_accumulation">Heavy Accumulation (&gt;+5%)</span>
+                        </button>
+                        <button class="inst-flow-btn" data-inst-option="high_ownership">
+                            <i data-lucide="lock"></i>
+                            <span data-i18n="inst_opt_high_ownership">High Ownership (&gt;70%)</span>
+                        </button>
+                        <button class="inst-flow-btn" data-inst-option="distribution">
+                            <i data-lucide="alert-triangle"></i>
+                            <span data-i18n="inst_opt_distribution">Heavy Distribution (&lt;-5%)</span>
+                        </button>
+                    </div>
+                    <div class="table-container surface-card">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_ticker">Ticker</th>
+                                    <th data-i18n="th_name">Company</th>
+                                    <th>Sector</th>
+                                    <th data-i18n="modal_mcap">Market Cap</th>
+                                    <th data-i18n="th_inst_own">Inst Own</th>
+                                    <th data-i18n="th_inst_trans">3M Inst Trans</th>
+                                    <th data-i18n="modal_price">Price</th>
+                                    <th data-i18n="modal_change">Change</th>
+                                    <th>Volume</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inst-flow-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subpanel 3: 13F Super Investors -->
+                <div id="subpanel-super-investors" class="insider-subpanel" style="display: none; margin-top: 12px;">
+                    <div class="super-investors-selector segmented" id="super-investor-pills" style="margin-bottom: 12px; overflow-x: auto;">
+                        <button class="super-investor-btn active" data-fund="berkshire">🪙 巴菲特 (Berkshire)</button>
+                        <button class="super-investor-btn" data-fund="bridgewater">🌊 达利欧 (Bridgewater)</button>
+                        <button class="super-investor-btn" data-fund="renaissance">⚡ 复兴科技 (Renaissance)</button>
+                        <button class="super-investor-btn" data-fund="pershing">🎯 比尔·阿克曼 (Pershing)</button>
+                        <button class="super-investor-btn" data-fund="appaloosa">🐅 泰珀 (Appaloosa)</button>
+                        <button class="super-investor-btn" data-fund="greenwoods">🌲 景林资产 (Greenwoods)</button>
+                    </div>
+
+                    <!-- Fund Profile Banner -->
+                    <div id="fund-info-banner" class="strategy-info-banner" style="margin-bottom: 14px;">
+                        <div class="strat-info-text">
+                            <span id="fund-info-title" class="strat-info-title">Berkshire Hathaway - Warren Buffett</span>
+                            <span id="fund-info-desc" class="strat-info-desc">Deep Value &amp; Durable Moats</span>
+                        </div>
+                        <div class="strat-weights-preview">
+                            <span id="fund-portfolio-val" class="weight-chip fund">13F AUM: $295B</span>
+                            <span id="fund-top-count" class="weight-chip tech">Top 10 Holdings</span>
+                        </div>
+                    </div>
+
+                    <div class="table-container surface-card">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_ticker">Ticker</th>
+                                    <th data-i18n="th_name">Company</th>
+                                    <th>Sector</th>
+                                    <th data-i18n="th_super_weight">Weight</th>
+                                    <th data-i18n="th_super_shares">Shares</th>
+                                    <th data-i18n="th_super_value">Value ($)</th>
+                                    <th data-i18n="th_super_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="super-investors-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
@@ -733,6 +833,19 @@
                         <h3 data-i18n="modal_etfs">Top ETF Holders</h3>
                         <div id="modal-etfs" class="tag-container">
                             <!-- ETF tags -->
+                        </div>
+                    </div>
+
+                    <!-- Top Institutional & Fund Holders Panel -->
+                    <div class="modal-detail-panel" id="modal-inst-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                            <h3 data-i18n="modal_institutional_holders" style="margin: 0;">Top Institutional &amp; Fund Holders</h3>
+                            <div id="modal-inst-metrics" class="modal-inst-metrics">
+                                <!-- Populated dynamically (Inst Own / Inst Count) -->
+                            </div>
+                        </div>
+                        <div id="modal-inst-content" class="modal-inst-content">
+                            <!-- Populated dynamically (Top Holders Table) -->
                         </div>
                     </div>
                 </div>

@@ -333,12 +333,93 @@ def get_stock(ticker: str):
                 res_info["inside_trader"] = []
         else:
             res_info["inside_trader"] = []
+
+        # Fetch institutional holders & major holders via yfinance
+        try:
+            import yfinance as yf
+            yticker = yf.Ticker(ticker)
+            inst_df = yticker.institutional_holders
+            if inst_df is not None and isinstance(inst_df, pd.DataFrame) and not inst_df.empty:
+                df_inst = inst_df.copy().fillna("")
+                if "Date Reported" in df_inst.columns:
+                    df_inst["Date Reported"] = df_inst["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
+                res_info["institutional_holders"] = df_inst.head(10).to_dict(orient="records")
+            else:
+                res_info["institutional_holders"] = []
+                
+            mf_df = yticker.mutualfund_holders
+            if mf_df is not None and isinstance(mf_df, pd.DataFrame) and not mf_df.empty:
+                df_mf = mf_df.copy().fillna("")
+                if "Date Reported" in df_mf.columns:
+                    df_mf["Date Reported"] = df_mf["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
+                res_info["mutualfund_holders"] = df_mf.head(5).to_dict(orient="records")
+            else:
+                res_info["mutualfund_holders"] = []
+
+            maj_df = yticker.major_holders
+            if maj_df is not None and isinstance(maj_df, pd.DataFrame) and not maj_df.empty:
+                df_maj = maj_df.copy().fillna("")
+                res_info["major_holders"] = df_maj.to_dict(orient="records")
+            else:
+                res_info["major_holders"] = []
+        except Exception as err:
+            print(f"Error fetching institutional holders via yf for {ticker}: {err}")
+            res_info["institutional_holders"] = []
+            res_info["mutualfund_holders"] = []
+            res_info["major_holders"] = []
             
         cache.set(cache_key, res_info, expires_in=14400) # 4 hours cache for single stock data
         return {"data": res_info, "source": "live"}
     except Exception as e:
         print(f"[ERROR] stock {ticker}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch stock details.")
+
+@app.get("/api/institutional/flow", response_model=GenericDataResponse)
+def get_institutional_flow(type: str = "accumulation"):
+    cache_key = f"inst_flow_{type.lower()}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
+
+    from scoring_config import INSTITUTIONAL_FILTERS, INSTITUTIONAL_COLUMNS
+    if type not in INSTITUTIONAL_FILTERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Institutional flow type '{type}' not supported. Choose from {list(INSTITUTIONAL_FILTERS.keys())}"
+        )
+
+    try:
+        from finvizfinance.screener.custom import Custom
+        fcustom = Custom()
+        fcustom.set_filter(filters_dict=INSTITUTIONAL_FILTERS[type])
+        df = fcustom.screener_view(
+            limit=100,
+            order="Market Cap.",
+            ascend=False,
+            verbose=0,
+            columns=INSTITUTIONAL_COLUMNS
+        )
+        data = []
+        if df is not None:
+            df = df.copy().fillna("")
+            if "Change %" in df.columns:
+                df["Change"] = df["Change %"]
+            data = df.to_dict(orient="records")
+
+        cache.set(cache_key, data, expires_in=7200) # 2 hours cache
+        return {"data": data, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        print(f"[ERROR] institutional flow {type}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch institutional flow data.")
+
+@app.get("/api/institutional/super-investors")
+def get_super_investors(fund: Optional[str] = "all"):
+    from scoring_config import SUPER_INVESTORS_DATA
+    if fund and fund != "all":
+        if fund not in SUPER_INVESTORS_DATA:
+            raise HTTPException(status_code=404, detail=f"Super investor fund '{fund}' not found.")
+        return {"data": SUPER_INVESTORS_DATA[fund], "fund": fund}
+    return {"data": SUPER_INVESTORS_DATA, "funds": list(SUPER_INVESTORS_DATA.keys())}
 
 @app.get("/api/confluences", response_model=ConfluenceResponse)
 def get_confluences(strategy: Optional[str] = "all"):

@@ -215,6 +215,8 @@ SCREENER_COLUMNS = [
     8,   # Forward P/E
     9,   # PEG
     13,  # P/Free Cash Flow
+    28,  # Institutional Ownership
+    29,  # Institutional Transactions
     30,  # Float Short
     33,  # Return on Equity
     38,  # Total Debt/Equity
@@ -235,9 +237,184 @@ SCREENER_COLUMNS = [
     69,  # Target Price
 ]
 
+# Dedicated institutional screener columns
+INSTITUTIONAL_COLUMNS = [
+    0,   # No.
+    1,   # Ticker
+    2,   # Company
+    3,   # Sector
+    4,   # Industry
+    6,   # Market Cap.
+    28,  # Institutional Ownership
+    29,  # Institutional Transactions
+    64,  # Relative Volume
+    65,  # Price
+    66,  # Change
+    67,  # Volume
+]
+
+INSTITUTIONAL_FILTERS = {
+    "accumulation": {
+        "InstitutionalTransactions": "Over +5%",
+    },
+    "high_ownership": {
+        "InstitutionalOwnership": "Over 70%",
+    },
+    "distribution": {
+        "InstitutionalTransactions": "Under -5%",
+    },
+}
+
+# Curated 13F Super Investors & Top Fund Portfolios
+SUPER_INVESTORS_DATA = {
+    "berkshire": {
+        "id": "berkshire",
+        "manager_en": "Warren Buffett",
+        "manager_zh": "沃伦·巴菲特",
+        "fund_name_en": "Berkshire Hathaway",
+        "fund_name_zh": "伯克希尔·哈撒韦",
+        "avatar": "🪙",
+        "portfolio_value": "$295B",
+        "top_holdings_count": 10,
+        "style_en": "Deep Value & Durable Moats",
+        "style_zh": "深度价值与护城河复利",
+        "holdings": [
+            {"ticker": "AAPL", "company": "Apple Inc.", "weight": "24.5%", "shares": "300.0M", "value": "$68.2B", "action": "hold", "sector": "Technology"},
+            {"ticker": "AXP", "company": "American Express", "weight": "15.2%", "shares": "151.6M", "value": "$42.3B", "action": "hold", "sector": "Financial"},
+            {"ticker": "BAC", "company": "Bank of America", "weight": "11.1%", "shares": "680.2M", "value": "$30.8B", "action": "reduce", "sector": "Financial"},
+            {"ticker": "KO", "company": "Coca-Cola Co", "weight": "9.8%", "shares": "400.0M", "value": "$27.4B", "action": "hold", "sector": "Consumer Defensive"},
+            {"ticker": "CVX", "company": "Chevron Corp", "weight": "6.2%", "shares": "118.6M", "value": "$17.3B", "action": "hold", "sector": "Energy"},
+            {"ticker": "OXY", "company": "Occidental Petroleum", "weight": "4.8%", "shares": "255.3M", "value": "$13.4B", "action": "buy", "sector": "Energy"},
+            {"ticker": "MCO", "company": "Moody's Corp", "weight": "4.1%", "shares": "24.7M", "value": "$11.5B", "action": "hold", "sector": "Financial"},
+            {"ticker": "KHC", "company": "Kraft Heinz Co", "weight": "3.5%", "shares": "325.6M", "value": "$9.8B", "action": "hold", "sector": "Consumer Defensive"},
+            {"ticker": "CB", "company": "Chubb Limited", "weight": "2.8%", "shares": "27.0M", "value": "$7.8B", "action": "buy", "sector": "Financial"},
+            {"ticker": "DVA", "company": "DaVita Inc", "weight": "1.9%", "shares": "36.1M", "value": "$5.3B", "action": "hold", "sector": "Healthcare"}
+        ]
+    },
+    "bridgewater": {
+        "id": "bridgewater",
+        "manager_en": "Ray Dalio",
+        "manager_zh": "瑞·达利欧",
+        "fund_name_en": "Bridgewater Associates",
+        "fund_name_zh": "桥水基金",
+        "avatar": "🌊",
+        "portfolio_value": "$19.8B",
+        "top_holdings_count": 10,
+        "style_en": "All-Weather Macro Parity",
+        "style_zh": "全天候全资产宏观对冲",
+        "holdings": [
+            {"ticker": "IVV", "company": "iShares Core S&P 500 ETF", "weight": "6.2%", "shares": "2.1M", "value": "$1.23B", "action": "buy", "sector": "ETF"},
+            {"ticker": "IEMG", "company": "iShares Core MSCI Emerging", "weight": "5.4%", "shares": "18.5M", "value": "$1.07B", "action": "buy", "sector": "ETF"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "4.8%", "shares": "5.2M", "value": "$950M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "4.3%", "shares": "6.5M", "value": "$850M", "action": "reduce", "sector": "Technology"},
+            {"ticker": "META", "company": "Meta Platforms Inc", "weight": "3.9%", "shares": "1.4M", "value": "$770M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "3.5%", "shares": "1.6M", "value": "$690M", "action": "hold", "sector": "Technology"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "3.1%", "shares": "3.2M", "value": "$615M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "PG", "company": "Procter & Gamble Co", "weight": "2.8%", "shares": "3.3M", "value": "$550M", "action": "hold", "sector": "Consumer Defensive"},
+            {"ticker": "JNJ", "company": "Johnson & Johnson", "weight": "2.4%", "shares": "2.9M", "value": "$475M", "action": "reduce", "sector": "Healthcare"},
+            {"ticker": "COST", "company": "Costco Wholesale Corp", "weight": "2.1%", "shares": "450K", "value": "$415M", "action": "buy", "sector": "Consumer Defensive"}
+        ]
+    },
+    "renaissance": {
+        "id": "renaissance",
+        "manager_en": "Jim Simons / Peter Brown",
+        "manager_zh": "量化之王·复兴科技",
+        "fund_name_en": "Renaissance Technologies",
+        "fund_name_zh": "复兴科技 (大奖章)",
+        "avatar": "⚡",
+        "portfolio_value": "$62.4B",
+        "top_holdings_count": 10,
+        "style_en": "Quantitative Statistical Arbitrage",
+        "style_zh": "高胜率数理统计套利与 Alpha",
+        "holdings": [
+            {"ticker": "PLTR", "company": "Palantir Technologies", "weight": "2.8%", "shares": "38.2M", "value": "$1.75B", "action": "buy", "sector": "Technology"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "2.5%", "shares": "12.0M", "value": "$1.56B", "action": "buy", "sector": "Technology"},
+            {"ticker": "AAPL", "company": "Apple Inc.", "weight": "2.2%", "shares": "6.1M", "value": "$1.37B", "action": "hold", "sector": "Technology"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "2.0%", "shares": "6.5M", "value": "$1.25B", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "META", "company": "Meta Platforms Inc", "weight": "1.9%", "shares": "2.1M", "value": "$1.18B", "action": "reduce", "sector": "Communication Services"},
+            {"ticker": "TSLA", "company": "Tesla Inc", "weight": "1.7%", "shares": "4.8M", "value": "$1.06B", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "AVGO", "company": "Broadcom Inc", "weight": "1.6%", "shares": "5.9M", "value": "$1.00B", "action": "buy", "sector": "Technology"},
+            {"ticker": "TSM", "company": "Taiwan Semiconductor", "weight": "1.5%", "shares": "5.1M", "value": "$935M", "action": "buy", "sector": "Technology"},
+            {"ticker": "LLY", "company": "Eli Lilly and Co", "weight": "1.4%", "shares": "1.1M", "value": "$870M", "action": "reduce", "sector": "Healthcare"},
+            {"ticker": "NVO", "company": "Novo Nordisk A/S", "weight": "1.3%", "shares": "7.5M", "value": "$810M", "action": "hold", "sector": "Healthcare"}
+        ]
+    },
+    "pershing": {
+        "id": "pershing",
+        "manager_en": "Bill Ackman",
+        "manager_zh": "比尔·阿克曼",
+        "fund_name_en": "Pershing Square Capital",
+        "fund_name_zh": "潘兴广场资本",
+        "avatar": "🎯",
+        "portfolio_value": "$13.2B",
+        "top_holdings_count": 8,
+        "style_en": "Concentrated High-Conviction Value",
+        "style_zh": "极度集中高确信度商业特权股",
+        "holdings": [
+            {"ticker": "HLT", "company": "Hilton Worldwide", "weight": "18.5%", "shares": "9.8M", "value": "$2.44B", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "CMG", "company": "Chipotle Mexican Grill", "weight": "16.8%", "shares": "35.2M", "value": "$2.22B", "action": "reduce", "sector": "Consumer Cyclical"},
+            {"ticker": "QSR", "company": "Restaurant Brands Intl", "weight": "15.4%", "shares": "28.5M", "value": "$2.03B", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "13.2%", "shares": "9.5M", "value": "$1.74B", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "GOOG", "company": "Alphabet Inc Class C", "weight": "10.5%", "shares": "7.4M", "value": "$1.39B", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "NKE", "company": "Nike Inc", "weight": "9.8%", "shares": "16.3M", "value": "$1.29B", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "BAM", "company": "Brookfield Asset Mgmt", "weight": "8.5%", "shares": "19.5M", "value": "$1.12B", "action": "new", "sector": "Financial"},
+            {"ticker": "SEAS", "company": "United Parks & Resorts", "weight": "5.2%", "shares": "12.8M", "value": "$685M", "action": "hold", "sector": "Consumer Cyclical"}
+        ]
+    },
+    "appaloosa": {
+        "id": "appaloosa",
+        "manager_en": "David Tepper",
+        "manager_zh": "大卫·泰珀",
+        "fund_name_en": "Appaloosa Management",
+        "fund_name_zh": "阿帕卢萨资产",
+        "avatar": "🐅",
+        "portfolio_value": "$6.7B",
+        "top_holdings_count": 10,
+        "style_en": "Distressed Assets & Tech Bet",
+        "style_zh": "困境反转大周期与科技核心重仓",
+        "holdings": [
+            {"ticker": "BABA", "company": "Alibaba Group Holding", "weight": "12.8%", "shares": "9.5M", "value": "$855M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "PDD", "company": "PDD Holdings Inc", "weight": "10.2%", "shares": "5.8M", "value": "$685M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "8.5%", "shares": "2.9M", "value": "$570M", "action": "reduce", "sector": "Consumer Cyclical"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "7.4%", "shares": "1.2M", "value": "$495M", "action": "hold", "sector": "Technology"},
+            {"ticker": "META", "company": "Meta Platforms Inc", "weight": "6.8%", "shares": "810K", "value": "$455M", "action": "reduce", "sector": "Communication Services"},
+            {"ticker": "GOOGL", "company": "Alphabet Inc Class A", "weight": "5.9%", "shares": "2.1M", "value": "$395M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "5.2%", "shares": "2.7M", "value": "$350M", "action": "reduce", "sector": "Technology"},
+            {"ticker": "BIDU", "company": "Baidu Inc", "weight": "4.8%", "shares": "3.5M", "value": "$320M", "action": "buy", "sector": "Communication Services"},
+            {"ticker": "JD", "company": "JD.com Inc", "weight": "4.2%", "shares": "7.8M", "value": "$280M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "INTC", "company": "Intel Corporation", "weight": "3.5%", "shares": "10.5M", "value": "$235M", "action": "new", "sector": "Technology"}
+        ]
+    },
+    "greenwoods": {
+        "id": "greenwoods",
+        "manager_en": "George Jiang",
+        "manager_zh": "蒋锦志 / 景林资产",
+        "fund_name_en": "Greenwoods Asset Management",
+        "fund_name_zh": "景林资产 (顶级中资美股)",
+        "avatar": "🌲",
+        "portfolio_value": "$3.8B",
+        "top_holdings_count": 10,
+        "style_en": "Global Chinese Alpha & AI Giants",
+        "style_zh": "中国出海龙头与全球 AI 基础设施",
+        "holdings": [
+            {"ticker": "PDD", "company": "PDD Holdings Inc", "weight": "19.5%", "shares": "6.2M", "value": "$740M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "META", "company": "Meta Platforms Inc", "weight": "16.2%", "shares": "1.1M", "value": "$615M", "action": "hold", "sector": "Communication Services"},
+            {"ticker": "TSM", "company": "Taiwan Semiconductor", "weight": "12.8%", "shares": "2.6M", "value": "$485M", "action": "buy", "sector": "Technology"},
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "weight": "10.4%", "shares": "3.0M", "value": "$395M", "action": "buy", "sector": "Technology"},
+            {"ticker": "NET", "company": "Cloudflare Inc", "weight": "6.8%", "shares": "2.5M", "value": "$260M", "action": "new", "sector": "Technology"},
+            {"ticker": "BABA", "company": "Alibaba Group Holding", "weight": "6.2%", "shares": "2.4M", "value": "$235M", "action": "buy", "sector": "Consumer Cyclical"},
+            {"ticker": "MSFT", "company": "Microsoft Corporation", "weight": "5.5%", "shares": "500K", "value": "$210M", "action": "hold", "sector": "Technology"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc", "weight": "4.8%", "shares": "950K", "value": "$182M", "action": "hold", "sector": "Consumer Cyclical"},
+            {"ticker": "FUTU", "company": "Futu Holdings Ltd", "weight": "4.1%", "shares": "1.8M", "value": "$155M", "action": "buy", "sector": "Financial"},
+            {"ticker": "DOX", "company": "Amdocs Limited", "weight": "3.2%", "shares": "1.4M", "value": "$122M", "action": "hold", "sector": "Technology"}
+        ]
+    }
+}
+
 def apply_signal_filter(fcustom, sig_key, sig_val):
     if sig_key in CUSTOM_FILTERS:
         fcustom.set_filter(filters_dict=CUSTOM_FILTERS[sig_key])
     else:
         fcustom.set_filter(signal=sig_val)
+
 

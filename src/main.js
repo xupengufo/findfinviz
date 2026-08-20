@@ -6,7 +6,7 @@ import { debounce } from './utils.js';
 import { openModal, closeModal, loadTradingViewWidget } from './modal.js';
 import { loadOpportunities, renderOpportunities } from './opportunities.js';
 import { loadConfluences, renderConfluences } from './confluences.js';
-import { loadInsider } from './insider.js';
+import { loadInsider, switchInsiderSubTab, loadInstFlow, loadSuperInvestors } from './insider.js';
 import { loadSectors } from './sectors.js';
 import { loadReddit } from './reddit.js';
 import { renderWatchlist } from './watchlist.js';
@@ -88,7 +88,7 @@ function initSelectors() {
         });
     });
 
-    // Option selectors for Insider
+    // Option selectors for Insider Form 4
     const optionButtons = document.querySelectorAll('.option-btn');
     optionButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -96,6 +96,39 @@ function initSelectors() {
             btn.classList.add('active');
             state.activeInsiderOption = btn.getAttribute('data-option');
             debouncedLoadInsider(); // Force reload (debounced)
+        });
+    });
+
+    // Sub-tab selectors for Smart Money & Institutional
+    const insiderSubtabButtons = document.querySelectorAll('.insider-subtab-btn');
+    insiderSubtabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            insiderSubtabButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const subtab = btn.getAttribute('data-subtab');
+            switchInsiderSubTab(subtab);
+        });
+    });
+
+    // Institutional Flow filter buttons
+    const instFlowButtons = document.querySelectorAll('.inst-flow-btn');
+    instFlowButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            instFlowButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.activeInstFlowOption = btn.getAttribute('data-inst-option');
+            loadInstFlow(false);
+        });
+    });
+
+    // 13F Super Investor fund pill buttons
+    const superInvestorButtons = document.querySelectorAll('.super-investor-btn');
+    superInvestorButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            superInvestorButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.activeSuperInvestor = btn.getAttribute('data-fund');
+            loadSuperInvestors(false);
         });
     });
 
