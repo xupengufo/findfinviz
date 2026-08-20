@@ -32,41 +32,153 @@ def get_field(item, *possible_keys):
             return v
     return ""
 
+def parse_earnings_info(earnings_str):
+    """Parses FinViz earnings date string (e.g. 'Feb 26/a', 'Feb 26/b', 'Mar 04')
+    and determines if earnings are imminent (within 7 days)."""
+    if not earnings_str or str(earnings_str).strip() in ["", "-", "nan", "None"]:
+        return None
+
+    raw = str(earnings_str).strip()
+    s = raw
+    session = ""
+    if "/a" in s.lower():
+        session = "AMC" # After market close
+        s = s.lower().replace("/a", "").strip()
+    elif "/b" in s.lower():
+        session = "BMO" # Before market open
+        s = s.lower().replace("/b", "").strip()
+
+    now = datetime.now(timezone.utc)
+    current_year = now.year
+
+    diff_days = None
+    is_imminent = False
+    display_str = raw
+
+    for fmt in ["%b %d %Y", "%m/%d/%Y", "%Y-%m-%d"]:
+        try:
+            target_str = f"{s} {current_year}" if not any(c in s for c in ["/", "-"]) else s
+            dt = datetime.strptime(target_str, fmt).replace(tzinfo=timezone.utc)
+            diff_days = (dt.date() - now.date()).days
+            if diff_days < -30:
+                dt = datetime.strptime(f"{s} {current_year + 1}", fmt).replace(tzinfo=timezone.utc)
+                diff_days = (dt.date() - now.date()).days
+            is_imminent = (0 <= diff_days <= 7)
+            display_str = dt.strftime("%b %d") + (f" ({session})" if session else "")
+            break
+        except Exception:
+            continue
+
+    return {
+        "raw": raw,
+        "display": display_str,
+        "days_until": diff_days,
+        "is_imminent": is_imminent,
+        "session": session
+    }
+
+def compute_trade_setup(price_val, atr_val, target_price_val, high_52w_val=None):
+    """Calculates dynamic stop loss, profit target, and Risk/Reward ratio based on ATR."""
+    try:
+        price = float(str(price_val).replace("$", "").replace(",", "").strip())
+        if price <= 0:
+            return None
+    except (ValueError, TypeError):
+        return None
+
+    atr = None
+    try:
+        if atr_val:
+            atr = float(str(atr_val).replace("$", "").replace(",", "").strip())
+    except (ValueError, TypeError):
+        pass
+
+    if not atr or atr <= 0:
+        atr = round(price * 0.035, 2)  # 3.5% volatility proxy
+
+    # Stop Loss: 1.5 * ATR below current price
+    stop_loss = round(max(0.01, price - 1.5 * atr), 2)
+    risk_amount = round(price - stop_loss, 2)
+    risk_pct = round(- (risk_amount / price) * 100, 1)
+
+    # Target Price: Prefer Analyst Target Price if > Price * 1.02, else Price + 3.0 * ATR
+    target = None
+    try:
+        if target_price_val:
+            tp = float(str(target_price_val).replace("$", "").replace(",", "").strip())
+            if tp > price * 1.02:
+                target = tp
+    except (ValueError, TypeError):
+        pass
+
+    if not target:
+        target = round(price + 3.0 * atr, 2)
+
+    target = round(target, 2)
+    reward_amount = round(target - price, 2)
+    reward_pct = round((reward_amount / price) * 100, 1)
+
+    rr_ratio = round(reward_amount / max(0.01, risk_amount), 1)
+    is_high_rr = (rr_ratio >= 3.0)
+
+    return {
+        "atr": round(atr, 2),
+        "entry_price": round(price, 2),
+        "stop_loss": stop_loss,
+        "stop_loss_pct": risk_pct,
+        "target_price": target,
+        "target_price_pct": reward_pct,
+        "rr_ratio": rr_ratio,
+        "is_high_rr": is_high_rr
+    }
+
 def calculate_confluences():
+    keys_to_fetch = [
+        "opps_oversold", "opps_double_bottom", "opps_new_high", "opps_triangle_ascending",
+        "opps_unusual_volume", "opps_high_short_interest", "opps_pullback", "opps_breakout_candidate",
+        "opps_quality_compounder", "opps_upgrades", "opps_downgrades", "opps_earnings_before",
+        "opps_earnings_after", "opps_most_active", "opps_top_losers", "opps_overbought",
+        "opps_wedge_up", "opps_wedge_down", "opps_top_gainers", "opps_most_volatile",
+        "opps_recent_insider_buying", "insiders_top_owner_trade", "insiders_latest",
+        "insiders_top_week", "reddit_sentiment", "sectors_performance"
+    ]
+    
+    cached_map = cache.mget(keys_to_fetch)
+
     # Detect empty cache state
-    if (cache.get("opps_oversold") is None or 
-        cache.get("opps_double_bottom") is None or 
-        cache.get("insiders_top_owner_trade") is None):
+    if (cached_map.get("opps_oversold") is None or 
+        cached_map.get("opps_double_bottom") is None or 
+        cached_map.get("insiders_top_owner_trade") is None):
         return {"status": "empty", "message": "Cache is empty. Please run sync first.", "data": []}
 
-    oversold = cache.get("opps_oversold") or []
-    double_bottom = cache.get("opps_double_bottom") or []
-    new_high = cache.get("opps_new_high") or []
-    triangle_ascending = cache.get("opps_triangle_ascending") or []
-    unusual_volume = cache.get("opps_unusual_volume") or []
-    high_short_interest = cache.get("opps_high_short_interest") or []
-    pullback = cache.get("opps_pullback") or []
-    breakout_candidate = cache.get("opps_breakout_candidate") or []
-    quality_compounder = cache.get("opps_quality_compounder") or []
-    upgrades = cache.get("opps_upgrades") or []
-    downgrades = cache.get("opps_downgrades") or []
-    earnings_before = cache.get("opps_earnings_before") or []
-    earnings_after = cache.get("opps_earnings_after") or []
-    most_active = cache.get("opps_most_active") or []
-    top_losers = cache.get("opps_top_losers") or []
-    overbought = cache.get("opps_overbought") or []
-    wedge_up = cache.get("opps_wedge_up") or []
-    wedge_down = cache.get("opps_wedge_down") or []
-    top_gainers = cache.get("opps_top_gainers") or []
-    most_volatile = cache.get("opps_most_volatile") or []
-    recent_insider_buying_signal = cache.get("opps_recent_insider_buying") or []
+    oversold = cached_map.get("opps_oversold") or []
+    double_bottom = cached_map.get("opps_double_bottom") or []
+    new_high = cached_map.get("opps_new_high") or []
+    triangle_ascending = cached_map.get("opps_triangle_ascending") or []
+    unusual_volume = cached_map.get("opps_unusual_volume") or []
+    high_short_interest = cached_map.get("opps_high_short_interest") or []
+    pullback = cached_map.get("opps_pullback") or []
+    breakout_candidate = cached_map.get("opps_breakout_candidate") or []
+    quality_compounder = cached_map.get("opps_quality_compounder") or []
+    upgrades = cached_map.get("opps_upgrades") or []
+    downgrades = cached_map.get("opps_downgrades") or []
+    earnings_before = cached_map.get("opps_earnings_before") or []
+    earnings_after = cached_map.get("opps_earnings_after") or []
+    most_active = cached_map.get("opps_most_active") or []
+    top_losers = cached_map.get("opps_top_losers") or []
+    overbought = cached_map.get("opps_overbought") or []
+    wedge_up = cached_map.get("opps_wedge_up") or []
+    wedge_down = cached_map.get("opps_wedge_down") or []
+    top_gainers = cached_map.get("opps_top_gainers") or []
+    most_volatile = cached_map.get("opps_most_volatile") or []
+    recent_insider_buying_signal = cached_map.get("opps_recent_insider_buying") or []
     
-    insiders = cache.get("insiders_top_owner_trade") or []
-    insiders_latest = cache.get("insiders_latest") or []
-    insiders_top_week = cache.get("insiders_top_week") or []
+    insiders = cached_map.get("insiders_top_owner_trade") or []
+    insiders_latest = cached_map.get("insiders_latest") or []
+    insiders_top_week = cached_map.get("insiders_top_week") or []
     
-    reddit = cache.get("reddit_sentiment") or []
-    sectors = cache.get("sectors_performance") or []
+    reddit = cached_map.get("reddit_sentiment") or []
+    sectors = cached_map.get("sectors_performance") or []
 
     tickers_map = {}
 
@@ -100,6 +212,12 @@ def calculate_confluences():
         # Average volume for ADTV liquidity filter (P0-3)
         avg_volume = get_field(item, "Avg Volume", "Average Volume")
 
+        # ATR, Target Price, 52W High, Earnings Date for Trade Setup & Earnings Warning
+        atr = get_field(item, "Average True Range", "ATR")
+        target_price = get_field(item, "Target Price")
+        high_52w = get_field(item, "52-Week High", "52W High")
+        earnings_date = get_field(item, "Earnings Date")
+
         # Compute ADTV (Average Daily Trading Value) = avg_volume × price
         adtv = ""
         try:
@@ -131,6 +249,10 @@ def calculate_confluences():
                 "Perf Month": perf_month or "",
                 "Perf Quarter": perf_quarter or "",
                 "Avg Volume": avg_volume or "",
+                "ATR": atr or "",
+                "Target Price": target_price or "",
+                "52W High": high_52w or "",
+                "Earnings Date": earnings_date or "",
                 "ADTV": adtv,
                 "Score": 0,
                 "TechScore": 0,
@@ -176,7 +298,12 @@ def calculate_confluences():
         if not entry["Perf Month"] and perf_month: entry["Perf Month"] = perf_month
         if not entry["Perf Quarter"] and perf_quarter: entry["Perf Quarter"] = perf_quarter
         if not entry["Avg Volume"] and avg_volume: entry["Avg Volume"] = avg_volume
+        if not entry.get("ATR") and atr: entry["ATR"] = atr
+        if not entry.get("Target Price") and target_price: entry["Target Price"] = target_price
+        if not entry.get("52W High") and high_52w: entry["52W High"] = high_52w
+        if not entry.get("Earnings Date") and earnings_date: entry["Earnings Date"] = earnings_date
         if not entry["ADTV"] and adtv: entry["ADTV"] = adtv
+        return entry
         return entry
 
     for item in oversold:
@@ -583,6 +710,20 @@ def calculate_confluences():
             "val": val_dim,
             "rs": rs_dim
         }
+        # Compute Trade Setup (ATR, Stop Loss, Target Price, R:R)
+        trade_setup = compute_trade_setup(e.get("Price"), e.get("ATR"), e.get("Target Price"), e.get("52W High"))
+        if trade_setup:
+            e["TradeSetup"] = trade_setup
+            if trade_setup.get("is_high_rr"):
+                reasons.append("reason_high_rr")
+
+        # Parse Earnings Info (Earnings Proximity Warning)
+        earnings_info = parse_earnings_info(e.get("Earnings Date"))
+        if earnings_info:
+            e["EarningsInfo"] = earnings_info
+            if earnings_info.get("is_imminent"):
+                conflicts.append("warning_earnings_imminent")
+
         e["Reasons"] = reasons
         e["Conflicts"] = conflicts
 

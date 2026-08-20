@@ -82,3 +82,98 @@ MIN_DIMENSIONS = 2
 
 # Liquidity threshold for ADTV (Average Daily Trading Value) flagging
 LIQUIDITY_FLOOR = 5_000_000  # $5M
+
+# Supported FinViz signals mapping
+SUPPORTED_SIGNALS = {
+    "oversold": "Oversold",
+    "overbought": "Overbought",
+    "double_bottom": "Double Bottom",
+    "wedge_up": "Wedge Up",
+    "wedge_down": "Wedge Down",
+    "triangle_ascending": "Triangle Ascending",
+    "top_gainers": "Top Gainers",
+    "top_losers": "Top Losers",
+    "new_high": "New High",
+    "most_active": "Most Active",
+    "most_volatile": "Most Volatile",
+    "unusual_volume": "Unusual Volume",
+    "upgrades": "Upgrades",
+    "downgrades": "Downgrades",
+    "earnings_before": "Earnings Before",
+    "earnings_after": "Earnings After",
+    "recent_insider_buying": "Recent Insider Buying",
+    "high_short_interest": "high_short_interest",
+    "pullback": "pullback",
+    "breakout_candidate": "breakout_candidate",
+    "quality_compounder": "quality_compounder"
+}
+
+CUSTOM_FILTERS = {
+    # Squeeze setup: high short interest + volume spark to ignite
+    "high_short_interest": {
+        "Float Short": "Over 15%",
+        "Relative Volume": "Over 1.5"
+    },
+    # Pullback in an uptrend: above 50/200 SMA (trend up) but pulled back
+    # below 20-day SMA with RSI cooling (<50).
+    "pullback": {
+        "50-Day Simple Moving Average": "Price above SMA50",
+        "200-Day Simple Moving Average": "Price above SMA200",
+        "20-Day Simple Moving Average": "Price below SMA20",
+        "RSI (14)": "Not Overbought (<50)"
+    },
+    # Breakout candidate: near 52w high + strong volume (>=2x) + uptrend confirmed
+    "breakout_candidate": {
+        "52-Week High/Low": "0-5% below High",
+        "Relative Volume": "Over 2",
+        "50-Day Simple Moving Average": "Price above SMA50"
+    },
+    # Quality compounder: strong fundamentals AND in a long-term uptrend
+    "quality_compounder": {
+        "Return on Equity": "Over +20%",
+        "Debt/Equity": "Under 0.5",
+        "EPS growththis year": "Over 10%",
+        "Gross Margin": "Positive (>0%)",
+        "P/E": "Profitable (>0)",
+        "200-Day Simple Moving Average": "Price above SMA200"
+    }
+}
+
+# FinViz screener column indices (see finvizfinance/constants.py CUSTOM_SCREENER_COLUMNS).
+SCREENER_COLUMNS = [
+    0,   # No.
+    1,   # Ticker
+    2,   # Company
+    3,   # Sector
+    4,   # Industry
+    6,   # Market Cap.
+    7,   # P/E
+    8,   # Forward P/E
+    9,   # PEG
+    13,  # P/Free Cash Flow
+    30,  # Float Short
+    33,  # Return on Equity
+    38,  # Total Debt/Equity
+    42,  # Performance (Week)  ~ 5-day return - used for TechScore momentum + RS
+    43,  # Performance (Month) ~ 20-day return - used for TechScore momentum + RS
+    44,  # Performance (Quarter) ~ 60-day return - used for RS
+    49,  # Average True Range (ATR)
+    52,  # 20-Day Simple Moving Average
+    53,  # 50-Day Simple Moving Average
+    54,  # 200-Day Simple Moving Average
+    57,  # 52-Week High
+    63,  # Average Volume       - used for ADTV (liquidity) filtering
+    64,  # Relative Volume
+    65,  # Price
+    66,  # Change
+    67,  # Volume
+    68,  # Earnings Date
+    69,  # Target Price
+]
+
+def apply_signal_filter(fcustom, sig_key, sig_val):
+    if sig_key in CUSTOM_FILTERS:
+        fcustom.set_filter(filters_dict=CUSTOM_FILTERS[sig_key])
+    else:
+        fcustom.set_filter(signal=sig_val)
+

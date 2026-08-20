@@ -1,8 +1,10 @@
 import os
-import sqlite3
-import redis
-import shutil
+import json
 import time
+import sqlite3
+import shutil
+import requests
+import redis
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -10,6 +12,9 @@ class FallbackCache:
     def __init__(self):
         self.redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
         self.is_redis = bool(self.redis_url)
+        self.is_redis_rest = False
+        self.client = None
+        self.session = requests.Session()
         
         # Always resolve db path defensively for local fallback
         if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
@@ -40,8 +45,10 @@ class FallbackCache:
             try:
                 if self.redis_url.startswith("http"):
                     self.is_redis_rest = True
-                    self.kv_url = self.redis_url
+                    self.kv_url = self.redis_url.rstrip("/")
                     self.kv_token = os.environ.get("KV_REST_API_TOKEN")
+                    if self.kv_token:
+                        self.session.headers.update({"Authorization": f"Bearer {self.kv_token}"})
                 else:
                     self.is_redis_rest = False
                     self.client = redis.from_url(self.redis_url, decode_responses=True)
@@ -72,22 +79,17 @@ class FallbackCache:
             print("Error cleaning up expired cache entries:", e)
 
     def get(self, key):
-        import time
         if self.is_redis:
             try:
                 if self.is_redis_rest:
-                    headers = {"Authorization": f"Bearer {self.kv_token}"}
-                    import requests
-                    res = requests.get(f"{self.kv_url}/get/{key}", headers=headers, timeout=5)
+                    res = self.session.get(f"{self.kv_url}/get/{key}", timeout=5)
                     if res.status_code == 200:
                         val = res.json().get("result")
                         if val:
-                            import json
                             return json.loads(val)
                 else:
                     val = self.client.get(key)
                     if val:
-                        import json
                         return json.loads(val)
             except Exception as e:
                 print(f"Redis get failed for '{key}', fallback to SQLite: {e}")
@@ -102,28 +104,84 @@ class FallbackCache:
                 row = cursor.fetchone()
                 if row:
                     val_str, expires_at = row
-                    import json
                     # On Vercel, return stale expired cache data rather than failing
-                    if os.environ.get("VERCEL"):
-                        return json.loads(val_str)
-                    if expires_at > now:
+                    if os.environ.get("VERCEL") or expires_at > now:
                         return json.loads(val_str)
         except Exception as e:
             print(f"SQLite get failed for '{key}': {e}")
         return None
 
+    def mget(self, keys: list[str]) -> dict[str, any]:
+        """Fetch multiple keys in a single batch operation."""
+        if not keys:
+            return {}
+
+        results = {}
+        missing_keys = list(keys)
+
+        # 1. Try Redis/Upstash REST
+        if self.is_redis:
+            try:
+                if self.is_redis_rest:
+                    pipeline_commands = [["GET", k] for k in keys]
+                    res = self.session.post(
+                        f"{self.kv_url}/pipeline",
+                        json=pipeline_commands,
+                        timeout=8
+                    )
+                    if res.status_code == 200:
+                        payload = res.json()
+                        for idx, item in enumerate(payload):
+                            k = keys[idx]
+                            raw_val = item.get("result")
+                            if raw_val is not None:
+                                try:
+                                    results[k] = json.loads(raw_val)
+                                    missing_keys.remove(k)
+                                except Exception:
+                                    pass
+                else:
+                    vals = self.client.mget(keys)
+                    for k, val_str in zip(keys, vals):
+                        if val_str is not None:
+                            try:
+                                results[k] = json.loads(val_str)
+                                missing_keys.remove(k)
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"Redis mget failed, fallback to SQLite: {e}")
+
+        # 2. For any missing keys, fallback to SQLite
+        if missing_keys:
+            try:
+                now = int(time.time())
+                placeholders = ",".join("?" * len(missing_keys))
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        f"SELECT key, value, expires_at FROM cache WHERE key IN ({placeholders})",
+                        missing_keys
+                    )
+                    rows = cursor.fetchall()
+                    for k, val_str, expires_at in rows:
+                        if os.environ.get("VERCEL") or expires_at > now:
+                            try:
+                                results[k] = json.loads(val_str)
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"SQLite mget failed: {e}")
+
+        return results
+
     def set(self, key, value, expires_in=14400):
-        import json
-        import time
         val_str = json.dumps(value)
         if self.is_redis:
             try:
                 if self.is_redis_rest:
-                    headers = {"Authorization": f"Bearer {self.kv_token}"}
-                    import requests
-                    res = requests.post(
+                    res = self.session.post(
                         f"{self.kv_url}/set/{key}?EX={expires_in}",
-                        headers=headers,
                         data=val_str,
                         timeout=5
                     )

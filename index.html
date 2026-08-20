@@ -581,12 +581,46 @@
                             <span class="m-value font-data" id="m-targetprice">-</span>
                         </div>
                         <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_atr">ATR (14)</span>
+                            <span class="m-value font-data" id="m-atr">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-label" data-i18n="modal_earnings">Earnings Date</span>
+                            <span class="m-value font-data" id="m-earnings">-</span>
+                        </div>
+                        <div class="metric-card">
                             <span class="m-label" data-i18n="modal_price">Price</span>
                             <span class="m-valueHighlight font-data" id="m-price">-</span>
                         </div>
                         <div class="metric-card">
                             <span class="m-label" data-i18n="modal_change">Change</span>
                             <span class="m-value font-data" id="m-change">-</span>
+                        </div>
+                    </div>
+
+                    <div id="modal-earnings-alert" class="modal-earnings-alert-banner" style="display: none;">
+                        <i data-lucide="alert-triangle"></i>
+                        <span id="modal-earnings-alert-text">Earnings report imminent</span>
+                    </div>
+
+                    <div class="modal-detail-panel" id="modal-trade-setup-panel" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h3 data-i18n="modal_trade_setup" style="margin: 0;">Trade Setup & Risk/Reward</h3>
+                            <span id="modal-trade-setup-rr" class="rr-badge rr-badge-high">R:R 1:3.0</span>
+                        </div>
+                        <div class="trade-setup-grid">
+                            <div class="ts-box">
+                                <span class="ts-box-label" data-i18n="ts_stop_loss">Suggested Stop Loss</span>
+                                <span id="modal-ts-sl" class="ts-box-val text-bearish font-data">-</span>
+                            </div>
+                            <div class="ts-box">
+                                <span class="ts-box-label" data-i18n="ts_target">Target Price</span>
+                                <span id="modal-ts-tp" class="ts-box-val text-bullish font-data">-</span>
+                            </div>
+                            <div class="ts-box">
+                                <span class="ts-box-label" data-i18n="ts_risk_pct">Stop Risk %</span>
+                                <span id="modal-ts-risk" class="ts-box-val text-bearish font-data">-</span>
+                            </div>
                         </div>
                     </div>
 

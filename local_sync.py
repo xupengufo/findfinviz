@@ -43,195 +43,29 @@ if os.path.exists(env_file):
 else:
     print(f"Warning: {env_file} not found. Ensure KV_REST_API_URL and KV_REST_API_TOKEN are set in your environment.")
 
-import redis
-
-redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or os.environ.get("KV_REST_API_URL")
-is_redis_rest = False
-client = None
-is_redis = bool(redis_url)
+# Import local finvizfinance package and config
 project_root = os.path.dirname(os.path.abspath(__file__))
-
-def get_db_path():
-    if os.environ.get("VERCEL") or not os.access(project_root, os.W_OK):
-        return "/tmp/cache.db"
-    api_db = os.path.join(project_root, "api", "cache.db")
-    if os.path.exists(os.path.dirname(api_db)):
-        return api_db
-    return os.path.join(project_root, "cache.db")
-
-if is_redis:
-    if redis_url.startswith("http"):
-        is_redis_rest = True
-        kv_url = redis_url
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        headers = {"Authorization": f"Bearer {kv_token}"}
-    else:
-        try:
-            client = redis.from_url(redis_url, decode_responses=True)
-            print("Connected to Redis server.")
-        except Exception as e:
-            print("Failed to connect to Redis server, falling back to SQLite cache.db:", e)
-            is_redis = False
-else:
-    print("Vercel Redis credentials missing. Falling back to SQLite cache.db for local caching.")
-    db_path = get_db_path()
-    try:
-        import sqlite3
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        cursor.execute("PRAGMA synchronous=NORMAL;")
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER)"
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print("Failed to initialize SQLite cache:", e)
-
-# Import local finvizfinance package
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 finviz_dir = os.path.join(project_root, "finvizfinance")
 if finviz_dir not in sys.path:
     sys.path.insert(0, finviz_dir)
+
+from api.cache_manager import cache
+from scoring_config import (
+    SUPPORTED_SIGNALS, CUSTOM_FILTERS, SCREENER_COLUMNS, apply_signal_filter
+)
 from finvizfinance.insider import Insider
 from finvizfinance.screener.custom import Custom
 from finvizfinance.group.overview import Overview as GroupOverview
 
-SUPPORTED_SIGNALS = {
-    "oversold": "Oversold",
-    "overbought": "Overbought",
-    "double_bottom": "Double Bottom",
-    "wedge_up": "Wedge Up",
-    "wedge_down": "Wedge Down",
-    "triangle_ascending": "Triangle Ascending",
-    "top_gainers": "Top Gainers",
-    "top_losers": "Top Losers",
-    "new_high": "New High",
-    "most_active": "Most Active",
-    "most_volatile": "Most Volatile",
-    "unusual_volume": "Unusual Volume",
-    "upgrades": "Upgrades",
-    "downgrades": "Downgrades",
-    "earnings_before": "Earnings Before",
-    "earnings_after": "Earnings After",
-    "recent_insider_buying": "Recent Insider Buying",
-    "high_short_interest": "high_short_interest",
-    "pullback": "pullback",
-    "breakout_candidate": "breakout_candidate",
-    "quality_compounder": "quality_compounder"
-}
-
-CUSTOM_FILTERS = {
-    # Squeeze setup: high short interest + volume spark to ignite
-    "high_short_interest": {
-        "Float Short": "Over 15%",
-        "Relative Volume": "Over 1.5"
-    },
-    # Pullback in an uptrend: above 50/200 SMA (trend up) but pulled back
-    # below 20-day SMA with RSI cooling (<50). A real pullback, not just "not overbought".
-    "pullback": {
-        "50-Day Simple Moving Average": "Price above SMA50",
-        "200-Day Simple Moving Average": "Price above SMA200",
-        "20-Day Simple Moving Average": "Price below SMA20",
-        "RSI (14)": "Not Overbought (<50)"
-    },
-    # Breakout candidate: near 52w high + strong volume (>=2x) + uptrend confirmed
-    "breakout_candidate": {
-        "52-Week High/Low": "0-5% below High",
-        "Relative Volume": "Over 2",
-        "50-Day Simple Moving Average": "Price above SMA50"
-    },
-    # Quality compounder: strong fundamentals AND in a long-term uptrend
-    # (good company ≠ good timing; require price above 200-day SMA)
-    "quality_compounder": {
-        "Return on Equity": "Over +20%",
-        "Debt/Equity": "Under 0.5",
-        "EPS growththis year": "Over 10%",
-        "Gross Margin": "Positive (>0%)",
-        "P/E": "Profitable (>0)",
-        "200-Day Simple Moving Average": "Price above SMA200"
-    }
-}
-
-# FinViz screener column indices (see finvizfinance/constants.py CUSTOM_SCREENER_COLUMNS).
-# Kept explicit + commented so future changes don't require decoding magic numbers.
-SCREENER_COLUMNS = [
-    0,   # No.
-    1,   # Ticker
-    2,   # Company
-    3,   # Sector
-    4,   # Industry
-    6,   # Market Cap.
-    7,   # P/E
-    8,   # Forward P/E
-    9,   # PEG
-    13,  # P/Free Cash Flow
-    30,  # Float Short
-    33,  # Return on Equity
-    38,  # Total Debt/Equity
-    42,  # Performance (Week)  ≈ 5-day return  — used for TechScore momentum + RS
-    43,  # Performance (Month) ≈ 20-day return — used for TechScore momentum + RS
-    44,  # Performance (Quarter) ≈ 60-day return — used for RS
-    63,  # Average Volume       — used for ADTV (liquidity) filtering
-    64,  # Relative Volume
-    65,  # Price
-    66,  # Change
-    67,  # Volume
-]
-
-def apply_signal_filter(fcustom, sig_key, sig_val):
-    if sig_key in CUSTOM_FILTERS:
-        fcustom.set_filter(filters_dict=CUSTOM_FILTERS[sig_key])
+def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache for safety
+    success = cache.set(key, data, expires_in=expires_in)
+    if success:
+        print(f"Successfully cached key '{key}'.")
     else:
-        fcustom.set_filter(signal=sig_val)
-
-def push_to_kv(key, data, expires_in=172800):  # Default 48 hours cache on KV for safety
-    val_str = json.dumps(data)
-    if is_redis:
-        if is_redis_rest:
-            url = f"{kv_url}/set/{key}?ex={expires_in}"
-            try:
-                res = requests.post(url, headers=headers, data=val_str, timeout=10)
-                if res.status_code == 200 and res.json().get("result") == "OK":
-                    print(f"Successfully pushed key '{key}' to Vercel KV (REST).")
-                    return True
-                else:
-                    print(f"Failed to push key '{key}' (REST):", res.status_code, res.text)
-                    return False
-            except Exception as e:
-                print(f"Error pushing key '{key}' (REST):", e)
-                return False
-        else:
-            try:
-                client.setex(key, expires_in, val_str)
-                print(f"Successfully pushed key '{key}' to Vercel Redis.")
-                return True
-            except Exception as e:
-                print(f"Error pushing key '{key}' to Redis:", e)
-                return False
-    else:
-        try:
-            import sqlite3
-            from datetime import datetime, timezone
-            expires_at = int(datetime.now(timezone.utc).timestamp()) + expires_in
-            db_path = get_db_path()
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL;")
-            cursor.execute("PRAGMA synchronous=NORMAL;")
-            cursor.execute(
-                "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
-                (key, val_str, expires_at)
-            )
-            conn.commit()
-            conn.close()
-            print(f"Successfully pushed key '{key}' to local SQLite cache.")
-            return True
-        except Exception as e:
-            print(f"Error pushing key '{key}' to SQLite:", e)
-            return False
+        print(f"Failed to cache key '{key}'.")
+    return success
 
 def sync_opportunities():
     for key, signal_name in SUPPORTED_SIGNALS.items():
@@ -625,25 +459,42 @@ def process_turbulence_output(df_result):
     }
     return payload
 
-def sync_turbulence():
-    print("Syncing market turbulence index...")
+def send_sync_notification(status="success", details=""):
+    webhook_url = os.environ.get("SYNC_WEBHOOK_URL")
+    if not webhook_url:
+        return
     try:
-        df_result = calculate_market_turbulence()
-        payload = process_turbulence_output(df_result)
-        push_to_kv("market_turbulence", payload, expires_in=172800) # 48 hours cache
-        print("Market turbulence sync successful.")
+        payload = {
+            "text": f"🚀 [FindFinviz Sync] Status: {status.upper()}\n{details}\nTimestamp: {datetime.now(timezone.utc).isoformat()}"
+        }
+        requests.post(webhook_url, json=payload, timeout=5)
+        print("Webhook alert sent.")
     except Exception as e:
-        print("Failed to sync market turbulence:", e)
+        print(f"Failed to send webhook notification: {e}")
 
 def run_all_sync():
-    sync_opportunities()
-    sync_insiders()
-    sync_sectors()
-    sync_reddit()
-    sync_turbulence()
+    errors = []
+    for step_name, step_func in [
+        ("opportunities", sync_opportunities),
+        ("insiders", sync_insiders),
+        ("sectors", sync_sectors),
+        ("reddit", sync_reddit),
+        ("turbulence", sync_turbulence),
+    ]:
+        try:
+            step_func()
+        except Exception as e:
+            err_msg = f"Step {step_name} failed: {e}"
+            print(f"[ERROR] {err_msg}")
+            errors.append(err_msg)
+
+    if errors:
+        send_sync_notification(status="partial_failure", details="\n".join(errors))
+    else:
+        send_sync_notification(status="success", details="All sync steps completed successfully.")
 
 if __name__ == "__main__":
     print("Starting local sync to Vercel KV...")
     run_all_sync()
-    print("Sync completed successfully!")
+    print("Sync completed!")
 

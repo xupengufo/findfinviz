@@ -42,10 +42,12 @@ export const reasonTranslations = {
         reason_rs_leader: "🏆 Relative Strength leader (outperforming SPY, momentum accelerating)",
         reason_rs_strong: "📈 Outperforming SPY on 2/3 timeframes",
         reason_rs_neutral: "≈ Mixed relative strength vs SPY",
+        reason_high_rr: "🎯 High Risk/Reward Setup (R:R >= 1:3.0)",
+        warning_earnings_imminent: "⚠️ Earnings report imminent (high volatility risk)",
         conflict_overbought_reversal: "⚠️ Overbought vs Reversal/Pullback conflict",
-        conflict_overbought_breakout: "⚠️ Breakout + Overbought — high chase risk",
-        conflict_reversal_bearish: "⚠️ Reversal vs Bearish Momentum — possible continuation",
-        conflict_quality_downgrade: "⚠️ Quality stock downgraded — check fundamentals"
+        conflict_overbought_breakout: "⚠️ Breakout + Overbought - high chase risk",
+        conflict_reversal_bearish: "⚠️ Reversal vs Bearish Momentum - possible continuation",
+        conflict_quality_downgrade: "⚠️ Quality stock downgraded - check fundamentals"
     },
     zh: {
         reason_reversal: "技术面反转 (超卖/双底构筑)",
@@ -74,10 +76,12 @@ export const reasonTranslations = {
         reason_rs_leader: "🏆 相对强度龙头 (全面跑赢 SPY，动量加速)",
         reason_rs_strong: "📈 3 个时段中 2 个跑赢 SPY",
         reason_rs_neutral: "≈ 相对强度表现参半",
-        conflict_overbought_reversal: "⚠️ 超买 vs 反转/回调 — 信号矛盾",
-        conflict_overbought_breakout: "⚠️ 突破+超买 — 高追风险",
-        conflict_reversal_bearish: "⚠️ 反转 vs 持续下跌 — 可能是下跌中继",
-        conflict_quality_downgrade: "⚠️ 绩优股被下调 — 需确认基本面"
+        reason_high_rr: "🎯 高盈亏比机会 (R:R >= 1:3.0)",
+        warning_earnings_imminent: "⚠️ 财报临近 (防范波动率暴跌/跳空风险)",
+        conflict_overbought_reversal: "⚠️ 超买 vs 反转/回调 - 信号矛盾",
+        conflict_overbought_breakout: "⚠️ 突破+超买 - 高追风险",
+        conflict_reversal_bearish: "⚠️ 反转 vs 持续下跌 - 可能是下跌中继",
+        conflict_quality_downgrade: "⚠️ 绩优股被下调 - 需确认基本面"
     }
 };
 
@@ -132,6 +136,12 @@ export const translations = {
         modal_peg: "PEG Ratio",
         modal_profit_margin: "Profit Margin",
         modal_target_price: "Target Price",
+        modal_atr: "ATR (14)",
+        modal_earnings: "Earnings Date",
+        modal_trade_setup: "Trade Setup & Risk/Reward",
+        ts_stop_loss: "Suggested Stop Loss",
+        ts_target: "Target Price",
+        ts_risk_pct: "Stop Risk %",
         modal_price: "Price",
         modal_change: "Change",
         modal_profile: "Company Profile",
@@ -328,6 +338,12 @@ export const translations = {
         modal_peg: "PEG 指标",
         modal_profit_margin: "净利率 Profit Margin",
         modal_target_price: "目标价 Target Price",
+        modal_atr: "真实波幅 ATR (14)",
+        modal_earnings: "财报公布日",
+        modal_trade_setup: "交易实战计划与盈亏比",
+        ts_stop_loss: "建议防守止损位",
+        ts_target: "预期盈利目标位",
+        ts_risk_pct: "止损幅度",
         modal_price: "当前价",
         modal_change: "今日变动",
         modal_profile: "公司简介",

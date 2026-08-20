@@ -36,8 +36,8 @@ finviz_dir = os.path.join(project_root, "finvizfinance")
 if finviz_dir not in sys.path:
     sys.path.insert(0, finviz_dir)
 
-from local_sync import SUPPORTED_SIGNALS, CUSTOM_FILTERS, SCREENER_COLUMNS, apply_signal_filter
 from scoring_config import (
+    SUPPORTED_SIGNALS, CUSTOM_FILTERS, SCREENER_COLUMNS, apply_signal_filter,
     DIMENSION_CAPS, TECH_FACTORS, FUND_FACTORS, SENT_FACTORS,
     VALUATION, RS_SCORING, MIN_SCORE, MIN_DIMENSIONS, LIQUIDITY_FLOOR
 )
@@ -57,8 +57,12 @@ app.add_middleware(
 )
 
 from api.cache_manager import cache
+from api.models import (
+    HealthResponse, GenericDataResponse, SectorDetailsResponse,
+    StockDetailsResponse, ConfluenceResponse, WSBCalendarResponse, TurbulenceResponse
+)
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse)
 def health():
     return {"status": "ok", "vercel_kv": cache.is_redis}
 
@@ -73,7 +77,7 @@ def trigger_sync(background_tasks: BackgroundTasks, api_key: str = None):
     background_tasks.add_task(run_all_sync)
     return {"status": "sync_triggered", "message": "Synchronization started in the background."}
 
-@app.get("/api/opportunities")
+@app.get("/api/opportunities", response_model=GenericDataResponse)
 def get_opportunities(signal: str = "Oversold"):
     cache_key = f"opps_{signal.lower().replace(' ', '_')}"
     cached_data = cache.get(cache_key)
@@ -111,7 +115,7 @@ def get_opportunities(signal: str = "Oversold"):
         print(f"[ERROR] opportunities: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch opportunities data.")
 
-@app.get("/api/insiders")
+@app.get("/api/insiders", response_model=GenericDataResponse)
 def get_insiders(option: str = "top owner trade"):
     cache_key = f"insiders_{option.lower().replace(' ', '_')}"
     cached_data = cache.get(cache_key)
@@ -142,7 +146,7 @@ def get_insiders(option: str = "top owner trade"):
         print(f"[ERROR] insiders: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch insider data.")
 
-@app.get("/api/sectors")
+@app.get("/api/sectors", response_model=GenericDataResponse)
 def get_sectors():
     cache_key = "sectors_performance"
     cached_data = cache.get(cache_key)
@@ -165,7 +169,7 @@ def get_sectors():
         print(f"[ERROR] sectors: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch sector data.")
 
-@app.get("/api/sectors/{sector_name}")
+@app.get("/api/sectors/{sector_name}", response_model=SectorDetailsResponse)
 def get_sector_details(sector_name: str):
     from urllib.parse import unquote
     sector_name = unquote(sector_name).strip()
@@ -230,7 +234,7 @@ def get_sector_details(sector_name: str):
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
 
-@app.get("/api/reddit")
+@app.get("/api/reddit", response_model=GenericDataResponse)
 def get_reddit_sentiment():
     cache_key = "reddit_sentiment"
     cached_data = cache.get(cache_key)
@@ -250,7 +254,7 @@ def get_reddit_sentiment():
         print(f"[ERROR] reddit: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch Reddit sentiment data.")
 
-@app.get("/api/stock/{ticker}")
+@app.get("/api/stock/{ticker}", response_model=StockDetailsResponse)
 def get_stock(ticker: str):
     cache_key = f"stock_details_{ticker.lower()}"
     cached_data = cache.get(cache_key)
@@ -335,12 +339,12 @@ def get_stock(ticker: str):
         print(f"[ERROR] stock {ticker}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch stock details.")
 
-@app.get("/api/confluences")
+@app.get("/api/confluences", response_model=ConfluenceResponse)
 def get_confluences():
     from api.scoring_engine import calculate_confluences
     return calculate_confluences()
 
-@app.get("/api/wsb-calendar")
+@app.get("/api/wsb-calendar", response_model=WSBCalendarResponse)
 def get_wsb_calendar():
     cache_key = "wsb_important_events_calendar_v2"
     cached_data = cache.get(cache_key)
@@ -424,7 +428,7 @@ def get_wsb_calendar():
         print(f"[ERROR] wsb-calendar: {e}")
         return {"data": {"zh": [], "en": []}, "source": "error", "error": str(e)}
 
-@app.get("/api/turbulence")
+@app.get("/api/turbulence", response_model=TurbulenceResponse)
 def get_turbulence():
     cached_data = cache.get("market_turbulence")
     if cached_data:
@@ -468,8 +472,8 @@ def get_turbulence():
         "chart_series": []
     }
 
-# Serve static frontend files (works locally and packaged in Vercel)
+# Serve static frontend files (if built dist directory exists, e.g. for single-server local previews)
 from fastapi.staticfiles import StaticFiles
-public_path = os.path.join(project_root, "public")
-if os.path.exists(public_path):
-    app.mount("/", StaticFiles(directory=public_path, html=True), name="static")
+dist_path = os.path.join(project_root, "dist")
+if os.path.exists(dist_path):
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")

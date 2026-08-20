@@ -49,10 +49,15 @@ export async function openModal(ticker) {
     }
 
     // Reset metrics
-    ['mcap', 'pe', 'sfloat', 'rsi', 'price', 'change'].forEach(id => {
+    ['mcap', 'pe', 'sfloat', 'rsi', 'roe', 'debteq', 'dividend', 'peg', 'profitmargin', 'targetprice', 'atr', 'earnings', 'price', 'change'].forEach(id => {
         const el = document.getElementById(`m-${id}`);
         if (el) el.innerText = '-';
     });
+
+    const earningsAlertInit = document.getElementById('modal-earnings-alert');
+    if (earningsAlertInit) earningsAlertInit.style.display = 'none';
+    const tsPanelInit = document.getElementById('modal-trade-setup-panel');
+    if (tsPanelInit) tsPanelInit.style.display = 'none';
 
     // Preload confluences if not loaded yet
     if (state.currentConfluencesList.length === 0) {
@@ -150,6 +155,14 @@ export async function openModal(ticker) {
         document.getElementById('m-peg').innerText = f['PEG'] || '-';
         document.getElementById('m-profitmargin').innerText = f['Profit Margin'] || '-';
         document.getElementById('m-targetprice').innerText = f['Target Price'] || '-';
+        
+        const mAtr = document.getElementById('m-atr');
+        if (mAtr) mAtr.innerText = f['ATR'] || f['Average True Range'] || (confluenceItem?.TradeSetup?.atr ? `$${confluenceItem.TradeSetup.atr}` : '-');
+
+        const mEarnings = document.getElementById('m-earnings');
+        const earningsStr = f['Earnings Date'] || confluenceItem?.EarningsInfo?.raw || '-';
+        if (mEarnings) mEarnings.innerText = earningsStr;
+
         document.getElementById('m-price').innerText = f['Price'] || '-';
         
         const { formatted: changeText, isBullish } = parseChange(f['Change']);
@@ -157,6 +170,63 @@ export async function openModal(ticker) {
         if (mChange) {
             mChange.innerText = changeText;
             mChange.className = 'm-value ' + (isBullish ? 'bullish' : 'bearish');
+        }
+
+        // Earnings Proximity Warning Banner
+        const earningsAlert = document.getElementById('modal-earnings-alert');
+        const earningsAlertText = document.getElementById('modal-earnings-alert-text');
+        if (earningsAlert && earningsAlertText) {
+            if (confluenceItem?.EarningsInfo?.is_imminent) {
+                const daysText = confluenceItem.EarningsInfo.days_until !== null ? `${confluenceItem.EarningsInfo.days_until}d` : 'Soon';
+                earningsAlertText.innerText = state.activeLang === 'zh'
+                    ? `⚠️ 财报预警：该标的将于近期公布财报 (${confluenceItem.EarningsInfo.display}，距今约 ${daysText})，可能面临剧烈波动或跳空风险！`
+                    : `⚠️ Earnings Risk Alert: Earnings expected soon (${confluenceItem.EarningsInfo.display}, ~${daysText}), high volatility or gap risk!`;
+                earningsAlert.style.display = 'flex';
+            } else {
+                earningsAlert.style.display = 'none';
+            }
+        }
+
+        // Trade Setup & R:R Panel
+        const tradeSetupPanel = document.getElementById('modal-trade-setup-panel');
+        if (tradeSetupPanel) {
+            let ts = confluenceItem?.TradeSetup;
+            if (!ts && f['Price']) {
+                const pr = parseFloat(String(f['Price']).replace('$', ''));
+                if (!isNaN(pr) && pr > 0) {
+                    const atrVal = parseFloat(String(f['ATR'] || f['Average True Range'] || '')) || (pr * 0.035);
+                    const tpVal = parseFloat(String(f['Target Price'] || ''));
+                    const sl = Math.max(0.01, +(pr - 1.5 * atrVal).toFixed(2));
+                    const tp = tpVal && tpVal > pr * 1.02 ? tpVal : +(pr + 3.0 * atrVal).toFixed(2);
+                    const risk = pr - sl;
+                    const reward = tp - pr;
+                    const rr = +(reward / Math.max(0.01, risk)).toFixed(1);
+                    ts = {
+                        atr: +atrVal.toFixed(2),
+                        entry_price: pr,
+                        stop_loss: sl,
+                        stop_loss_pct: +(-(risk / pr) * 100).toFixed(1),
+                        target_price: tp,
+                        target_price_pct: +((reward / pr) * 100).toFixed(1),
+                        rr_ratio: rr,
+                        is_high_rr: rr >= 3.0
+                    };
+                }
+            }
+
+            if (ts) {
+                tradeSetupPanel.style.display = 'block';
+                const rrBadge = document.getElementById('modal-trade-setup-rr');
+                if (rrBadge) {
+                    rrBadge.innerText = `R:R 1:${ts.rr_ratio}`;
+                    rrBadge.className = 'rr-badge ' + (ts.is_high_rr ? 'rr-badge-high' : 'rr-badge-normal');
+                }
+                document.getElementById('modal-ts-sl').innerHTML = `$${ts.stop_loss} <small>(${ts.stop_loss_pct}%)</small>`;
+                document.getElementById('modal-ts-tp').innerHTML = `$${ts.target_price} <small>(+${ts.target_price_pct}%)</small>`;
+                document.getElementById('modal-ts-risk').innerText = `${Math.abs(ts.stop_loss_pct)}%`;
+            } else {
+                tradeSetupPanel.style.display = 'none';
+            }
         }
 
         // Render Peers

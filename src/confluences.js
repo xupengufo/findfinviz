@@ -143,15 +143,47 @@ export function renderConfluences(list) {
 
         const badgesHtml = getBadgesHtml(item);
 
+        // P0: Earnings Proximity Warning
+        let earningsBadgeHtml = '';
+        if (item.EarningsInfo && item.EarningsInfo.is_imminent) {
+            const eInfo = item.EarningsInfo;
+            const daysText = eInfo.days_until !== null ? `${eInfo.days_until}d` : 'Soon';
+            earningsBadgeHtml = `<span class="earnings-warning-badge" title="${state.activeLang === 'zh' ? '财报即将发布，注意剧烈波动风险' : 'Earnings imminent, high volatility risk'}">⚠️ ${state.activeLang === 'zh' ? '财报临近' : 'Earnings'}: ${escapeHtml(eInfo.display)} (${daysText})</span>`;
+        }
+
+        // P0: Trade Setup & R:R Bar
+        let tradeSetupHtml = '';
+        if (item.TradeSetup) {
+            const ts = item.TradeSetup;
+            const rrClass = ts.is_high_rr ? 'rr-badge-high' : 'rr-badge-normal';
+            tradeSetupHtml = `
+                <div class="trade-setup-bar">
+                    <div class="trade-setup-item">
+                        <span class="ts-label">${state.activeLang === 'zh' ? '建议止损' : 'Stop Loss'}</span>
+                        <span class="ts-val text-bearish font-data">$${ts.stop_loss} <small>(${ts.stop_loss_pct}%)</small></span>
+                    </div>
+                    <div class="trade-setup-item">
+                        <span class="ts-label">${state.activeLang === 'zh' ? '目标预期' : 'Target'}</span>
+                        <span class="ts-val text-bullish font-data">$${ts.target_price} <small>(+${ts.target_price_pct}%)</small></span>
+                    </div>
+                    <div class="trade-setup-item ts-rr-wrap">
+                        <span class="ts-label">${state.activeLang === 'zh' ? '盈亏比' : 'R:R'}</span>
+                        <span class="rr-badge ${rrClass}">1:${ts.rr_ratio}</span>
+                    </div>
+                </div>
+            `;
+        }
+
         card.innerHTML = `
             <div class="confluence-header">
                 <div>
                     <span class="card-ticker">${escapeHtml(item['Ticker']) || '-'}</span>
                     <div class="card-company" style="margin: 4px 0 0 0; white-space: normal; overflow: visible;">${escapeHtml(item['Company']) || '-'}</div>
-                    <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                    <div class="card-tech-subrow" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
                         ${dominantPattern ? `<span class="pattern-badge ${patternClass}">${dominantPattern}</span>` : ''}
                         ${volumeSparkHtml}
                         ${liquidityBadgeHtml}
+                        ${earningsBadgeHtml}
                     </div>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: flex-start;">
@@ -190,6 +222,8 @@ export function renderConfluences(list) {
                     <span class="item-value ${isLowLiquidity ? 'text-warning' : ''}">$${adtvText}</span>
                 </div>
             </div>
+
+            ${tradeSetupHtml}
 
             ${reasonsHtml}
         `;
