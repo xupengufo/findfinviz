@@ -334,36 +334,49 @@ def get_stock(ticker: str):
         else:
             res_info["inside_trader"] = []
 
-        # Fetch institutional holders & major holders via yfinance
+        # Fetch institutional holders & major holders via prewarmed cache or yfinance
         try:
-            import yfinance as yf
-            yticker = yf.Ticker(ticker)
-            inst_df = yticker.institutional_holders
-            if inst_df is not None and isinstance(inst_df, pd.DataFrame) and not inst_df.empty:
-                df_inst = inst_df.copy().fillna("")
-                if "Date Reported" in df_inst.columns:
-                    df_inst["Date Reported"] = df_inst["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
-                res_info["institutional_holders"] = df_inst.head(10).to_dict(orient="records")
+            cached_holders = cache.get(f"stock_holders_{ticker}")
+            if cached_holders and isinstance(cached_holders, dict):
+                res_info["institutional_holders"] = cached_holders.get("institutional_holders", [])
+                res_info["mutualfund_holders"] = cached_holders.get("mutualfund_holders", [])
+                res_info["major_holders"] = cached_holders.get("major_holders", [])
             else:
-                res_info["institutional_holders"] = []
-                
-            mf_df = yticker.mutualfund_holders
-            if mf_df is not None and isinstance(mf_df, pd.DataFrame) and not mf_df.empty:
-                df_mf = mf_df.copy().fillna("")
-                if "Date Reported" in df_mf.columns:
-                    df_mf["Date Reported"] = df_mf["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
-                res_info["mutualfund_holders"] = df_mf.head(5).to_dict(orient="records")
-            else:
-                res_info["mutualfund_holders"] = []
+                import yfinance as yf
+                yticker = yf.Ticker(ticker)
+                inst_df = yticker.institutional_holders
+                if inst_df is not None and isinstance(inst_df, pd.DataFrame) and not inst_df.empty:
+                    df_inst = inst_df.copy().fillna("")
+                    if "Date Reported" in df_inst.columns:
+                        df_inst["Date Reported"] = df_inst["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
+                    res_info["institutional_holders"] = df_inst.head(10).to_dict(orient="records")
+                else:
+                    res_info["institutional_holders"] = []
+                    
+                mf_df = yticker.mutualfund_holders
+                if mf_df is not None and isinstance(mf_df, pd.DataFrame) and not mf_df.empty:
+                    df_mf = mf_df.copy().fillna("")
+                    if "Date Reported" in df_mf.columns:
+                        df_mf["Date Reported"] = df_mf["Date Reported"].apply(lambda x: str(x).split(" ")[0] if x else "")
+                    res_info["mutualfund_holders"] = df_mf.head(5).to_dict(orient="records")
+                else:
+                    res_info["mutualfund_holders"] = []
 
-            maj_df = yticker.major_holders
-            if maj_df is not None and isinstance(maj_df, pd.DataFrame) and not maj_df.empty:
-                df_maj = maj_df.copy().fillna("")
-                res_info["major_holders"] = df_maj.to_dict(orient="records")
-            else:
-                res_info["major_holders"] = []
+                maj_df = yticker.major_holders
+                if maj_df is not None and isinstance(maj_df, pd.DataFrame) and not maj_df.empty:
+                    df_maj = maj_df.copy().fillna("")
+                    res_info["major_holders"] = df_maj.to_dict(orient="records")
+                else:
+                    res_info["major_holders"] = []
+
+                # Cache dedicated holders data for 24h
+                cache.set(f"stock_holders_{ticker}", {
+                    "institutional_holders": res_info["institutional_holders"],
+                    "mutualfund_holders": res_info["mutualfund_holders"],
+                    "major_holders": res_info["major_holders"]
+                }, expires_in=86400)
         except Exception as err:
-            print(f"Error fetching institutional holders via yf for {ticker}: {err}")
+            print(f"Error fetching institutional holders for {ticker}: {err}")
             res_info["institutional_holders"] = []
             res_info["mutualfund_holders"] = []
             res_info["major_holders"] = []
@@ -382,16 +395,11 @@ def get_institutional_flow(type: str = "accumulation"):
         return {"data": cached_data, "source": "cache", "updated_at": datetime.now(timezone.utc).isoformat()}
 
     from scoring_config import INSTITUTIONAL_FILTERS, INSTITUTIONAL_COLUMNS
-    if type not in INSTITUTIONAL_FILTERS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Institutional flow type '{type}' not supported. Choose from {list(INSTITUTIONAL_FILTERS.keys())}"
-        )
-
     try:
         from finvizfinance.screener.custom import Custom
         fcustom = Custom()
-        fcustom.set_filter(filters_dict=INSTITUTIONAL_FILTERS[type])
+        filters = INSTITUTIONAL_FILTERS.get(type.lower(), ["sh_insttrans_o5"])
+        fcustom.set_filter(filters_dict={}, extra_filters=filters)
         df = fcustom.screener_view(
             limit=100,
             order="Market Cap.",
@@ -415,11 +423,14 @@ def get_institutional_flow(type: str = "accumulation"):
 @app.get("/api/institutional/super-investors")
 def get_super_investors(fund: Optional[str] = "all"):
     from scoring_config import SUPER_INVESTORS_DATA
+    cached_super = cache.get("super_investors_data")
+    all_data = cached_super if (cached_super and isinstance(cached_super, dict)) else SUPER_INVESTORS_DATA
+    
     if fund and fund != "all":
-        if fund not in SUPER_INVESTORS_DATA:
+        if fund not in all_data:
             raise HTTPException(status_code=404, detail=f"Super investor fund '{fund}' not found.")
-        return {"data": SUPER_INVESTORS_DATA[fund], "fund": fund}
-    return {"data": SUPER_INVESTORS_DATA, "funds": list(SUPER_INVESTORS_DATA.keys())}
+        return {"data": all_data[fund], "fund": fund}
+    return {"data": all_data, "funds": list(all_data.keys())}
 
 @app.get("/api/confluences", response_model=ConfluenceResponse)
 def get_confluences(strategy: Optional[str] = "all"):

@@ -224,6 +224,10 @@ def calculate_confluences(strategy: str = "all"):
         high_52w = get_field(item, "52-Week High", "52W High")
         earnings_date = get_field(item, "Earnings Date")
 
+        # Institutional Ownership & Transactions
+        inst_own = get_field(item, "Inst Own", "Institutional Ownership", "Institutional Ownership %")
+        inst_trans = get_field(item, "Inst Trans", "Institutional Transactions", "Institutional Transactions %")
+
         # Compute ADTV (Average Daily Trading Value) = avg_volume × price
         adtv = ""
         try:
@@ -259,6 +263,8 @@ def calculate_confluences(strategy: str = "all"):
                 "Target Price": target_price or "",
                 "52W High": high_52w or "",
                 "Earnings Date": earnings_date or "",
+                "Inst Own": inst_own or "",
+                "Inst Trans": inst_trans or "",
                 "ADTV": adtv,
                 "Score": 0,
                 "TechScore": 0,
@@ -282,7 +288,10 @@ def calculate_confluences(strategy: str = "all"):
                     "analyst_downgrade": False,
                     "overbought": False,
                     "bearish_momentum": False,
-                    "low_liquidity": False
+                    "low_liquidity": False,
+                    "inst_accumulation": False,
+                    "inst_high_ownership": False,
+                    "inst_distribution": False
                 }
             }
         entry = tickers_map[t]
@@ -548,6 +557,39 @@ def calculate_confluences(strategy: str = "all"):
         if e["Factors"]["analyst_downgrade"]:
             fund_dim += FUND_FACTORS["analyst_downgrade"]
             reasons.append("reason_analyst_downgrade")
+
+        # Institutional Flow & Ownership Factors
+        inst_trans_val = None
+        try:
+            it_raw = str(e.get("Inst Trans", "")).replace("%", "").strip()
+            if it_raw and it_raw != "-":
+                raw_f = float(it_raw)
+                inst_trans_val = raw_f if "%" in str(e.get("Inst Trans")) or abs(raw_f) > 1.0 else raw_f * 100
+        except (ValueError, TypeError):
+            pass
+
+        inst_own_val = None
+        try:
+            io_raw = str(e.get("Inst Own", "")).replace("%", "").strip()
+            if io_raw and io_raw != "-":
+                raw_o = float(io_raw)
+                inst_own_val = raw_o if "%" in str(e.get("Inst Own")) or abs(raw_o) > 1.0 else raw_o * 100
+        except (ValueError, TypeError):
+            pass
+
+        if inst_trans_val is not None:
+            if inst_trans_val >= 5.0:  # >= +5% institutional net accumulation
+                e["Factors"]["inst_accumulation"] = True
+                fund_dim += 6
+                reasons.append("reason_inst_accumulation")
+            elif inst_trans_val <= -5.0:  # <= -5% institutional net distribution
+                e["Factors"]["inst_distribution"] = True
+                conflicts.append("conflict_inst_distribution")
+
+        if inst_own_val is not None and inst_own_val >= 70.0:  # >= 70% institutional ownership
+            e["Factors"]["inst_high_ownership"] = True
+            fund_dim += 3
+            reasons.append("reason_inst_high_ownership")
 
         # Quality compounder + downgrade conflict
         if e["Factors"]["quality_compounder"] and e["Factors"]["analyst_downgrade"]:

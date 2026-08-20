@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import concurrent.futures
 from datetime import datetime, timezone
 
 USER_AGENTS = [
@@ -141,6 +142,94 @@ def sync_institutional_flow():
             time.sleep(1.5)
         except Exception as e:
             print(f"Failed to scrape institutional flow '{ftype}':", e)
+
+def sync_super_investors():
+    """Fetches SEC EDGAR 13F-HR filings for top super investors and synchronizes portfolio data."""
+    from scoring_config import SUPER_INVESTORS_DATA
+    print("Syncing SEC EDGAR 13F-HR filings for Super Investors...")
+    ciks = {
+        "berkshire": "0001067983",
+        "bridgewater": "0001350694",
+        "renaissance": "0001037389",
+        "pershing": "0001336528",
+        "appaloosa": "0001006438",
+        "greenwoods": "0001550974"
+    }
+
+    updated_data = {}
+    sec_headers = {
+        "User-Agent": "FindFinvizAnalytics research@findfinviz.app",
+        "Accept": "application/json"
+    }
+
+    for fund_id, base_profile in SUPER_INVESTORS_DATA.items():
+        profile = dict(base_profile)
+        cik = ciks.get(fund_id)
+        if cik:
+            url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+            try:
+                r = requests.get(url, headers=sec_headers, timeout=8)
+                if r.status_code == 200:
+                    d = r.json()
+                    recent = d.get("filings", {}).get("recent", {})
+                    forms = recent.get("form", [])
+                    dates = recent.get("filingDate", [])
+                    for f_name, dt in zip(forms[:20], dates[:20]):
+                        if "13F" in f_name:
+                            profile["sec_filing_date"] = dt
+                            profile["sec_form"] = f_name
+                            profile["sec_cik"] = cik
+                            break
+            except Exception as e:
+                print(f"SEC EDGAR lookup for {fund_id} warning: {e}")
+        updated_data[fund_id] = profile
+
+    push_to_kv("super_investors_data", updated_data)
+    print("Super Investors 13F filings synchronized successfully.")
+
+def prewarm_stock_holders():
+    """Pre-warms institutional holder data for top high-momentum tickers."""
+    import yfinance as yf
+    print("Pre-warming top stock institutional holders...")
+    tickers_to_warm = set(["AAPL", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "PLTR", "BABA", "PDD", "AVGO", "AMD", "TSM"])
+    
+    # Also collect top tickers from institutional accumulation
+    try:
+        acc_data = cache.get("inst_flow_accumulation")
+        if acc_data and isinstance(acc_data, list):
+            for row in acc_data[:15]:
+                t = row.get("Ticker")
+                if t:
+                    tickers_to_warm.add(t)
+    except Exception:
+        pass
+
+    def warm_single(ticker):
+        try:
+            yt = yf.Ticker(ticker)
+            inst_df = yt.institutional_holders
+            mf_df = yt.mutualfund_holders
+            maj_df = yt.major_holders
+            holder_payload = {
+                "institutional_holders": inst_df.head(10).to_dict(orient="records") if inst_df is not None and not inst_df.empty else [],
+                "mutualfund_holders": mf_df.head(5).to_dict(orient="records") if mf_df is not None and not mf_df.empty else [],
+                "major_holders": maj_df.to_dict(orient="records") if maj_df is not None and not maj_df.empty else []
+            }
+            if "institutional_holders" in holder_payload:
+                for h in holder_payload["institutional_holders"]:
+                    if "Date Reported" in h:
+                        h["Date Reported"] = str(h["Date Reported"]).split(" ")[0]
+            if "mutualfund_holders" in holder_payload:
+                for m in holder_payload["mutualfund_holders"]:
+                    if "Date Reported" in m:
+                        m["Date Reported"] = str(m["Date Reported"]).split(" ")[0]
+            push_to_kv(f"stock_holders_{ticker}", holder_payload)
+        except Exception:
+            pass
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        list(executor.map(warm_single, list(tickers_to_warm)[:25]))
+    print(f"Pre-warmed institutional holders for {len(tickers_to_warm)} tickers.")
 
 def sync_sectors():
     print("Scraping sector performance matrix...")
@@ -506,9 +595,11 @@ def run_all_sync():
         ("opportunities", sync_opportunities),
         ("insiders", sync_insiders),
         ("institutional_flow", sync_institutional_flow),
+        ("super_investors", sync_super_investors),
         ("sectors", sync_sectors),
         ("reddit", sync_reddit),
         ("turbulence", sync_turbulence),
+        ("prewarm_holders", prewarm_stock_holders),
     ]:
         try:
             step_func()

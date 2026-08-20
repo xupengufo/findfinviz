@@ -284,6 +284,24 @@ export function getBadgesHtml(item) {
             const label = state.activeLang === 'zh' ? '⚠️ 超买' : '⚠️ Overbought';
             badges.push(`<span class="card-badge card-badge-warning"><i data-lucide="alert-triangle" style="width:10px;height:10px;"></i> ${label}</span>`);
         }
+        if (item['Factors']['inst_accumulation']) {
+            const rawT = item['Inst Trans'];
+            let tStr = '+5%';
+            if (rawT) {
+                tStr = typeof rawT === 'number' ? (rawT > 0 ? '+' : '') + (rawT * 100).toFixed(1) + '%' : String(rawT);
+            }
+            const label = state.activeLang === 'zh' ? `🏛️ 机构抢筹 ${tStr}` : `🏛️ Inst Accum ${tStr}`;
+            badges.push(`<span class="card-badge card-badge-inst-accum" title="${state.activeLang === 'zh' ? '近3个月机构主力大额净加仓' : 'Heavy institutional net accumulation'}">${label}</span>`);
+        }
+        if (item['Factors']['inst_high_ownership']) {
+            const rawO = item['Inst Own'];
+            let oStr = '>70%';
+            if (rawO) {
+                oStr = typeof rawO === 'number' ? (rawO * 100).toFixed(0) + '%' : String(rawO);
+            }
+            const label = state.activeLang === 'zh' ? `🔒 机构控盘 ${oStr}` : `🔒 Inst Own ${oStr}`;
+            badges.push(`<span class="card-badge card-badge-inst-own" title="${state.activeLang === 'zh' ? '机构持股占比高，筹码高度锁定' : 'High institutional float lockup'}">${label}</span>`);
+        }
     }
 
     if (badges.length === 0) return '';

@@ -1316,6 +1316,20 @@ html[data-theme=dark] .segmented button.active {
     border-color: rgba(239, 68, 68, 0.18);
 }
 
+.card-badge-inst-accum {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.3);
+    font-weight: 600;
+}
+
+.card-badge-inst-own {
+    background: rgba(197, 176, 134, 0.12);
+    color: var(--brand-gold);
+    border-color: rgba(197, 176, 134, 0.3);
+    font-weight: 600;
+}
+
 /* Confluence Score styling */
 .confluence-header {
     display: flex;
