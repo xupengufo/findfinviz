@@ -83,8 +83,50 @@
                     <div class="filter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" data-i18n="confluences_subtitle">
                         Stocks aligning technical reversals/breakouts, institutional volume, insider buying, and retail sentiment.
                     </div>
+
+                    <!-- Strategy Profiles Selector -->
+                    <div class="strategy-selector-wrapper" style="margin-top: 10px; width: 100%;">
+                        <div class="strategy-selector segmented" id="strategy-selector">
+                            <button class="strategy-btn active" data-strategy="all">
+                                <i data-lucide="layers"></i>
+                                <span data-i18n="strat_all">All-Round</span>
+                            </button>
+                            <button class="strategy-btn" data-strategy="momentum">
+                                <i data-lucide="zap"></i>
+                                <span data-i18n="strat_momentum">Momentum Alpha</span>
+                            </button>
+                            <button class="strategy-btn" data-strategy="compounder">
+                                <i data-lucide="gem"></i>
+                                <span data-i18n="strat_compounder">Quality Compounder</span>
+                            </button>
+                            <button class="strategy-btn" data-strategy="squeeze">
+                                <i data-lucide="flame"></i>
+                                <span data-i18n="strat_squeeze">Short Squeeze</span>
+                            </button>
+                            <button class="strategy-btn" data-strategy="reversal">
+                                <i data-lucide="shield"></i>
+                                <span data-i18n="strat_reversal">Oversold Bounce</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Strategy Info & Weights Banner -->
+                    <div id="strategy-info-banner" class="strategy-info-banner">
+                        <div class="strat-info-text">
+                            <span id="strat-info-title" class="strat-info-title">All-Round Confluence Strategy</span>
+                            <span id="strat-info-desc" class="strat-info-desc">Balanced 5-factor scoring model across technicals, fundamentals, sentiment, valuation, and relative strength.</span>
+                        </div>
+                        <div class="strat-weights-preview" id="strat-weights-preview">
+                            <span class="weight-chip tech" title="Technical Structure">Tech 30%</span>
+                            <span class="weight-chip fund" title="Fundamentals">Fund 30%</span>
+                            <span class="weight-chip sent" title="Sentiment">Sent 15%</span>
+                            <span class="weight-chip val" title="Valuation">Val 5%</span>
+                            <span class="weight-chip rs" title="Relative Strength">RS 20%</span>
+                        </div>
+                    </div>
+
                     <!-- Market Cap Filter -->
-                    <div class="mcap-filter-selector segmented" style="margin-top: 8px; align-self: flex-start;">
+                    <div class="mcap-filter-selector segmented" style="margin-top: 10px; align-self: flex-start;">
                         <button class="mcap-filter-btn active" data-mcap="all" data-context="confluences">
                             <span data-i18n="mcap_all">All Caps</span>
                         </button>

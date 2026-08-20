@@ -2305,6 +2305,130 @@ html[data-theme=dark] .tech-score-low {
     opacity: 0.85;
 }
 
+/* --- Multi-Strategy Preset Styles --- */
+.strategy-selector-wrapper {
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.strategy-selector {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--surface-muted);
+    padding: 3px;
+    border-radius: var(--shape-cut-xs);
+    border: 1px solid var(--border);
+}
+
+.strategy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: calc(var(--shape-cut-xs) - 2px);
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    white-space: nowrap;
+}
+
+.strategy-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.strategy-btn:hover {
+    color: var(--text-primary);
+    background: var(--gold-wash-light);
+}
+
+.strategy-btn.active {
+    background: var(--surface-strong);
+    color: var(--brand-gold);
+    border-color: var(--brand-gold);
+    box-shadow: var(--shadow-soft);
+}
+
+.strategy-info-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 14px;
+    background: var(--gold-wash-light);
+    border: 1px solid var(--border);
+    border-radius: var(--shape-cut-xs);
+    flex-wrap: wrap;
+}
+
+.strat-info-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 260px;
+}
+
+.strat-info-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--brand-gold);
+    letter-spacing: 0.02em;
+}
+
+.strat-info-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.strat-weights-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.weight-chip {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+}
+
+.weight-chip.tech {
+    border-color: rgba(95, 163, 223, 0.4);
+    color: var(--positive);
+}
+
+.weight-chip.fund {
+    border-color: rgba(197, 176, 134, 0.4);
+    color: var(--brand-gold);
+}
+
+.weight-chip.sent {
+    border-color: rgba(185, 109, 63, 0.4);
+    color: var(--negative);
+}
+
+.weight-chip.val {
+    border-color: rgba(156, 163, 175, 0.4);
+    color: var(--neutral);
+}
+
+.weight-chip.rs {
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #a855f7;
+}
+
 
 
 

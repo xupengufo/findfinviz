@@ -8,6 +8,8 @@ export const state = {
     activeSortDirection: 'desc',
     activeMcapFilter: 'all',
     activeConfluenceMcapFilter: 'all',
+    activeStrategy: 'all',
+    strategyCache: {},
     currentOppsList: [],
     currentInsiderList: [],
     currentSectorsList: [],

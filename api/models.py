@@ -25,6 +25,8 @@ class ConfluenceResponse(BaseModel):
     status: str = "ok"
     message: Optional[str] = None
     data: List[Dict[str, Any]] = Field(default_factory=list)
+    strategy: Optional[str] = "all"
+    profile: Optional[Dict[str, Any]] = None
     updated_at: Optional[str] = None
 
 class WSBCalendarData(BaseModel):

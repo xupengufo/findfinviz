@@ -10,9 +10,41 @@ import {
 } from './utils.js';
 import { openModal } from './modal.js';
 
-export async function loadConfluences(force = false) {
-    if (state.tabLoaded.confluences && !force) return;
-    
+export function updateStrategyBanner(strategy, profile) {
+    const titleEl = document.getElementById('strat-info-title');
+    const descEl = document.getElementById('strat-info-desc');
+    const weightsEl = document.getElementById('strat-weights-preview');
+    if (!titleEl || !descEl || !weightsEl) return;
+
+    const stratTitleKey = `strat_${strategy}_title`;
+    const stratDescKey = `strat_${strategy}_desc`;
+
+    titleEl.innerText = (translations[state.activeLang] && translations[state.activeLang][stratTitleKey]) || profile?.name_en || strategy;
+    descEl.innerText = (translations[state.activeLang] && translations[state.activeLang][stratDescKey]) || profile?.desc_en || '';
+
+    const caps = profile?.dim_caps || { tech: 30, fund: 30, sent: 15, val: 5, rs: 20 };
+    weightsEl.innerHTML = `
+        <span class="weight-chip tech" title="Technical Structure">Tech ${caps.tech}%</span>
+        <span class="weight-chip fund" title="Fundamentals">Fund ${caps.fund}%</span>
+        <span class="weight-chip sent" title="Sentiment">Sent ${caps.sent}%</span>
+        <span class="weight-chip val" title="Valuation">Val ${caps.val}%</span>
+        <span class="weight-chip rs" title="Relative Strength">RS ${caps.rs}%</span>
+    `;
+}
+
+export async function loadConfluences(force = false, strategy = state.activeStrategy || 'all') {
+    state.activeStrategy = strategy;
+
+    // Check client-side strategy cache
+    if (!force && state.strategyCache[strategy]) {
+        const payload = state.strategyCache[strategy];
+        state.currentConfluencesList = payload.data || [];
+        updateStrategyBanner(strategy, payload.profile);
+        renderConfluences(state.currentConfluencesList);
+        state.tabLoaded.confluences = true;
+        return;
+    }
+
     const grid = document.getElementById('confluences-grid');
     if (!grid) return;
     grid.innerHTML = `
@@ -23,10 +55,13 @@ export async function loadConfluences(force = false) {
     `;
 
     try {
-        const res = await fetch(`${API_BASE}/api/confluences`);
+        const res = await fetch(`${API_BASE}/api/confluences?strategy=${encodeURIComponent(strategy)}`);
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         const payload = await res.json();
         updateTimestamp(payload);
+        state.strategyCache[strategy] = payload;
+        updateStrategyBanner(strategy, payload.profile);
+
         if (payload.status === 'empty') {
             grid.innerHTML = `<div class="no-data"><i data-lucide="alert-circle"></i> ${translations[state.activeLang].confluence_cache_empty || payload.message}</div>`;
             if (window.lucide) window.lucide.createIcons();
@@ -240,6 +275,10 @@ export function renderConfluences(list) {
 
 onLanguageChange(() => {
     if (state.tabLoaded.confluences) {
+        const cachedPayload = state.strategyCache[state.activeStrategy];
+        if (cachedPayload) {
+            updateStrategyBanner(state.activeStrategy, cachedPayload.profile);
+        }
         renderConfluences(state.currentConfluencesList);
     }
 });

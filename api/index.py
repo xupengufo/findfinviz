@@ -4,6 +4,7 @@ import json
 import sqlite3
 import concurrent.futures
 import random
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import requests
 import pandas as pd
@@ -340,9 +341,14 @@ def get_stock(ticker: str):
         raise HTTPException(status_code=500, detail="Failed to fetch stock details.")
 
 @app.get("/api/confluences", response_model=ConfluenceResponse)
-def get_confluences():
+def get_confluences(strategy: Optional[str] = "all"):
     from api.scoring_engine import calculate_confluences
-    return calculate_confluences()
+    return calculate_confluences(strategy=strategy or "all")
+
+@app.get("/api/strategies")
+def get_strategies():
+    from scoring_config import STRATEGY_PROFILES
+    return {"strategies": STRATEGY_PROFILES}
 
 @app.get("/api/wsb-calendar", response_model=WSBCalendarResponse)
 def get_wsb_calendar():

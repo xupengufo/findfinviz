@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from api.cache_manager import cache
 from scoring_config import (
-    DIMENSION_CAPS, TECH_FACTORS, FUND_FACTORS, SENT_FACTORS,
+    DIMENSION_CAPS, STRATEGY_PROFILES, TECH_FACTORS, FUND_FACTORS, SENT_FACTORS,
     VALUATION, RS_SCORING, MIN_SCORE, MIN_DIMENSIONS, LIQUIDITY_FLOOR
 )
 
@@ -132,7 +132,13 @@ def compute_trade_setup(price_val, atr_val, target_price_val, high_52w_val=None)
         "is_high_rr": is_high_rr
     }
 
-def calculate_confluences():
+def calculate_confluences(strategy: str = "all"):
+    profile = STRATEGY_PROFILES.get(strategy, STRATEGY_PROFILES["all"])
+    dim_caps = profile["dim_caps"]
+    min_score = profile.get("min_score", MIN_SCORE)
+    min_dimensions = profile.get("min_dimensions", MIN_DIMENSIONS)
+    required_factors = profile.get("required_factors", [])
+
     keys_to_fetch = [
         "opps_oversold", "opps_double_bottom", "opps_new_high", "opps_triangle_ascending",
         "opps_unusual_volume", "opps_high_short_interest", "opps_pullback", "opps_breakout_candidate",
@@ -149,7 +155,7 @@ def calculate_confluences():
     if (cached_map.get("opps_oversold") is None or 
         cached_map.get("opps_double_bottom") is None or 
         cached_map.get("insiders_top_owner_trade") is None):
-        return {"status": "empty", "message": "Cache is empty. Please run sync first.", "data": []}
+        return {"status": "empty", "message": "Cache is empty. Please run sync first.", "data": [], "strategy": profile["id"], "profile": profile}
 
     oversold = cached_map.get("opps_oversold") or []
     double_bottom = cached_map.get("opps_double_bottom") or []
@@ -523,9 +529,9 @@ def calculate_confluences():
             tech_dim += TECH_FACTORS["conflict_reversal_bearish"]
             conflicts.append("conflict_reversal_bearish")
 
-        tech_dim = max(min(tech_dim, DIMENSION_CAPS["tech"]), 0)
+        tech_dim = max(min(tech_dim * (dim_caps["tech"] / 30.0), dim_caps["tech"]), 0)
 
-        # 2. Fundamentals & Corporate Insiders (Max 30)
+        # 2. Fundamentals & Corporate Insiders (Max 30 default)
         fund_dim = 0
         if e["Factors"]["insider_buying"]:
             fund_dim += FUND_FACTORS["insider_buying"]
@@ -547,9 +553,9 @@ def calculate_confluences():
         if e["Factors"]["quality_compounder"] and e["Factors"]["analyst_downgrade"]:
             conflicts.append("conflict_quality_downgrade")
 
-        fund_dim = max(min(fund_dim, DIMENSION_CAPS["fund"]), 0)
+        fund_dim = max(min(fund_dim * (dim_caps["fund"] / 30.0), dim_caps["fund"]), 0)
 
-        # 3. Market Sentiment & Flow (Max 15)
+        # 3. Market Sentiment & Flow (Max 15 default)
         sent_dim = 0
         if e["Factors"]["momentum_leader"]:
             sent_dim += SENT_FACTORS["momentum_leader"]
@@ -568,9 +574,9 @@ def calculate_confluences():
             sent_dim += SENT_FACTORS["bearish_momentum"]
             reasons.append("reason_bearish_momentum")
 
-        sent_dim = max(min(sent_dim, DIMENSION_CAPS["sent"]), 0)
+        sent_dim = max(min(sent_dim * (dim_caps["sent"] / 15.0), dim_caps["sent"]), 0)
 
-        # 4. Valuation (Max 5)
+        # 4. Valuation (Max 5 default)
         val_dim = 0
         try:
             fwd_pe_str = str(e.get("Forward P/E") or "").strip()
@@ -604,9 +610,9 @@ def calculate_confluences():
                         val_dim += sc; reasons.append("reason_peg_expensive")
         except Exception:
             pass
-        val_dim = max(min(val_dim, DIMENSION_CAPS["val"]), 0)
+        val_dim = max(min(val_dim * (dim_caps["val"] / 5.0), dim_caps["val"]), 0)
 
-        # 5. Relative Strength vs SPY (Max 20)
+        # 5. Relative Strength vs SPY (Max 20 default)
         rs_dim = 0
         try:
             stock_5d = normalize_change_pct(e.get("Perf Week"))
@@ -631,7 +637,13 @@ def calculate_confluences():
                 reasons.append("reason_rs_neutral")
         except Exception:
             pass
-        rs_dim = max(min(rs_dim, DIMENSION_CAPS["rs"]), 0)
+        rs_dim = max(min(rs_dim * (dim_caps["rs"] / 20.0), dim_caps["rs"]), 0)
+
+        tech_dim = round(tech_dim)
+        fund_dim = round(fund_dim)
+        sent_dim = round(sent_dim)
+        val_dim = round(val_dim)
+        rs_dim = round(rs_dim)
 
         score = tech_dim + fund_dim + sent_dim + val_dim + rs_dim
 
@@ -727,9 +739,24 @@ def calculate_confluences():
         e["Reasons"] = reasons
         e["Conflicts"] = conflicts
 
+        # Strategy specific factor gating
+        if required_factors:
+            matches_strategy = any(e["Factors"].get(f) for f in required_factors)
+            if not matches_strategy:
+                if strategy == "momentum" and rs_dim >= dim_caps["rs"] * 0.6:
+                    matches_strategy = True
+            if not matches_strategy:
+                continue
+
         dims_with_score = sum([1 for d in [tech_dim, fund_dim, sent_dim, val_dim, rs_dim] if d > 0])
-        if e["Score"] >= MIN_SCORE and dims_with_score >= MIN_DIMENSIONS:
+        if e["Score"] >= min_score and dims_with_score >= min_dimensions:
             res_list.append(e)
 
     res_list = sorted(res_list, key=lambda x: x["Score"], reverse=True)
-    return {"data": res_list, "source": "live", "updated_at": datetime.now(timezone.utc).isoformat()}
+    return {
+        "data": res_list,
+        "source": "live",
+        "strategy": profile["id"],
+        "profile": profile,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }

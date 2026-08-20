@@ -23,6 +23,70 @@ DIMENSION_CAPS = {
     "rs": 20,
 }
 
+# --- Multi-Strategy Presets & Trading Profiles ---
+STRATEGY_PROFILES = {
+    "all": {
+        "id": "all",
+        "name_en": "All-Round Confluence",
+        "name_zh": "全景多维共振",
+        "icon": "layers",
+        "desc_en": "Balanced 5-factor scoring model across technicals, fundamentals, sentiment, valuation, and relative strength.",
+        "desc_zh": "均衡 5 维共振模型，兼顾技术形态、基本面、市场情绪、估值与相对强度。",
+        "dim_caps": {"tech": 30, "fund": 30, "sent": 15, "val": 5, "rs": 20},
+        "min_score": 35,
+        "min_dimensions": 2,
+        "required_factors": [],
+    },
+    "momentum": {
+        "id": "momentum",
+        "name_en": "Momentum Alpha",
+        "name_zh": "动量主升突破",
+        "icon": "zap",
+        "desc_en": "Prioritizes high relative strength vs SPY, breakout patterns, unusual volume, and leading sectors.",
+        "desc_zh": "聚焦跑赢大盘的相对强度龙头、技术面放量突破及领涨板块主升浪标的。",
+        "dim_caps": {"tech": 35, "fund": 10, "sent": 15, "val": 5, "rs": 35},
+        "min_score": 38,
+        "min_dimensions": 2,
+        "required_factors": ["breakout", "breakout_candidate", "volume_spike", "momentum_leader"],
+    },
+    "compounder": {
+        "id": "compounder",
+        "name_en": "Quality Compounder",
+        "name_zh": "优质价值复利",
+        "icon": "gem",
+        "desc_en": "High ROE, low debt, reasonable valuation, and pullbacks to moving average support.",
+        "desc_zh": "精选高 ROE、低负债、估值合理且回踩关键均线支撑的绩优核心资产。",
+        "dim_caps": {"tech": 15, "fund": 45, "sent": 10, "val": 15, "rs": 15},
+        "min_score": 35,
+        "min_dimensions": 2,
+        "required_factors": ["quality_compounder", "insider_buying", "pullback"],
+    },
+    "squeeze": {
+        "id": "squeeze",
+        "name_en": "Short Squeeze Play",
+        "name_zh": "逼空爆发狙击",
+        "icon": "flame",
+        "desc_en": "High short float (>15%), sudden volume spikes, and retail sentiment surges for explosive moves.",
+        "desc_zh": "锁定高卖空比例、异常放量异动与散户热度激增的爆发性逼空博弈机会。",
+        "dim_caps": {"tech": 25, "fund": 10, "sent": 40, "val": 5, "rs": 20},
+        "min_score": 35,
+        "min_dimensions": 2,
+        "required_factors": ["short_squeeze", "volume_spike", "reddit_popular"],
+    },
+    "reversal": {
+        "id": "reversal",
+        "name_en": "Oversold Bounce",
+        "name_zh": "深跌超卖筑底",
+        "icon": "shield",
+        "desc_en": "Deep RSI oversold levels, double bottoms, and executive insider accumulation at support.",
+        "desc_zh": "捕捉 RSI 深度超卖、双底筑底以及高管内部人抄底增持的左侧/右侧反弹机会。",
+        "dim_caps": {"tech": 40, "fund": 25, "sent": 10, "val": 15, "rs": 10},
+        "min_score": 35,
+        "min_dimensions": 2,
+        "required_factors": ["reversal", "insider_buying"],
+    },
+}
+
 # --- Technical Structure factor scores ---
 TECH_FACTORS = {
     "reversal": 17,           # was 20, scaled for 30 cap

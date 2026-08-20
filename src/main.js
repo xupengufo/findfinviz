@@ -154,6 +154,18 @@ function initSelectors() {
         });
     });
 
+    // Strategy Profiles selectors for Confluences
+    const strategyButtons = document.querySelectorAll('.strategy-btn');
+    strategyButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            strategyButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const strategy = btn.getAttribute('data-strategy');
+            state.activeStrategy = strategy;
+            loadConfluences(false, strategy);
+        });
+    });
+
     // Range selectors for Turbulence
     const rangeButtons = document.querySelectorAll('.turb-range-btn');
     rangeButtons.forEach(btn => {
